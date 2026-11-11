@@ -44,7 +44,8 @@ start-frontend.bat    # Runs Next.js frontend on http://localhost:3000
    cd backend
    python -m venv .venv
    .venv\Scripts\pip install -r requirements.txt
-   cp .env.example .env   # Add your GEMINI_API_KEY
+   # one .env at the repo root serves backend + frontend
+   cp ../.env.example ../.env   # add your GEMINI_API_KEY
    python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
    ```
    * Interactive API docs: `http://localhost:8000/docs`
@@ -115,7 +116,7 @@ SkillOra/
 │   │   └── engine/             # Matching, scoring, and verification engines
 │   ├── eval/                   # Benchmark evaluation runner
 │   ├── requirements.txt
-│   └── .env.example
+└── .env.example   (single env for everything)
 ├── docs/                       # Project specifications, setup guides, and UI references
 ├── frontend/
 │   ├── app/                    # Next.js App Router (Landing, How-it-Works, Login, Workflow)

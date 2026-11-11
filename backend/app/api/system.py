@@ -186,3 +186,55 @@ def run_eval():
     from eval.run_eval import run_all
 
     return run_all()
+
+
+# ---------------------------------------------------------------- live proof for the requirements page
+class GuardrailTry(BaseModel):
+    text: str
+
+
+@router.post("/guardrails/test")
+def guardrail_test(b: GuardrailTry):
+    """Run any text through the real input guard (prompt-injection + toxicity); the verdict is also written to the audit trail."""
+    from app.core import guardrail
+
+    try:
+        guardrail.check_input_text(b.text, where="live demo", uid=None)
+        return {"blocked": False, "kind": "", "message": "Clean - passed to the agents."}
+    except guardrail.GuardrailViolation as e:
+        return {"blocked": True, "kind": e.kind, "message": f"Blocked: {e}"}
+
+
+@router.get("/audit")
+def audit_trail(kind: str | None = None, user: User = Depends(current_user)):
+    """Callback / provenance trail: agent steps, tool calls, guardrail verdicts and A2A messages, newest first."""
+    from app.core import audit
+
+    return {"events": audit.recent(user.id, kind), "stats": audit.stats()}
+
+
+@router.get("/compliance")
+def compliance():
+    """Live status of the 11 project requirements, computed from the running system (not hard-coded)."""
+    import httpx
+
+    from app import config
+    from app.core import audit, tracing
+
+    tr = tracing.status()
+    a2a_card = None
+    if config.A2A_ENABLED:
+        try:
+            a2a_card = httpx.get(f"{config.PUBLIC_URL}/a2a/writer/.well-known/agent-card.json", timeout=3).json()
+        except Exception:  # noqa: BLE001
+            a2a_card = None
+    st = audit.stats()
+    return {
+        "a2a": {"enabled": config.A2A_ENABLED, "card_url": f"{config.PUBLIC_URL}/a2a/writer/.well-known/agent-card.json",
+                "card": ({"name": a2a_card.get("name"), "description": a2a_card.get("description"), "skills": [s.get("name") for s in a2a_card.get("skills", [])]} if a2a_card else None),
+                "server": "Google ADK (Resume Writer)", "client": "CrewAI (Tailoring Planner)", "calls": st["a2a"], "secured": bool(config.A2A_SHARED_KEY)},
+        "tracing": {**tr, "dashboard": config.LANGFUSE_HOST},
+        "mcp": {"tools": len(list_mcp_tools())},
+        "audit": st,
+        "deployment": {"platform": "Railway", "public_url": config.PUBLIC_URL, "database": "PostgreSQL" if config.DB_URL.startswith("postgres") else "SQLite"},
+    }

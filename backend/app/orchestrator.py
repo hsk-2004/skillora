@@ -100,6 +100,28 @@ def _template_summary(analysis: dict, pool: list[dict]) -> str:
     return f"Early-career {role.lower()} with hands-on project experience in {sk}."
 
 
+def _write(analysis, targets, pool, uid, local_writer):
+    """Preferred path: CrewAI Tailoring Planner --A2A--> remote ADK Resume Writer. Falls back to the in-process ADK writer."""
+    from .config import A2A_ENABLED
+
+    if A2A_ENABLED:
+        try:
+            import json as _j
+            import uuid as _u
+
+            from .a2a.client import planner_delegate
+
+            job = {"title": analysis["title"], "keywords": analysis["keywords"][:12], "must_haves": [r["text"] for r in analysis["requirements"] if r["level"] == "must"][:8]}
+            payload = {"job": job, "items": [{"id": f["id"], "project": f["project"], "details": f.get("details") or [f["text"]], "stack": f.get("stack", "")} for f in targets],
+                       "_ctx": {"uid": uid, "facts": {f["id"]: f for f in pool}, "pool_ids": [f["id"] for f in pool], "bundles": {t["id"]: t.get("ids", [t["id"]]) for t in targets}}}
+            with activity.step(uid, "A2A hop", "CrewAI Planner → A2A protocol → ADK Writer"):
+                reply = planner_delegate(payload, "ctx-" + _u.uuid4().hex[:8], uid)
+            return {"summary": reply.get("summary"), "bullets": reply.get("bullets", [])}, {t["id"]: 1 for t in targets}
+        except Exception as e:  # noqa: BLE001
+            log.warning("A2A path failed (%s); using in-process ADK writer", e)
+    return local_writer(analysis, targets, pool, uid)
+
+
 def write_resume_text(analysis: dict, targets: list[dict], pool: list[dict], use_llm: bool = True, uid: int | None = None) -> dict:
     """Writer<->Verifier loop. Returns {summary, bullets: {fid: (text, attempts, mode)}}."""
     by_id = {f["id"]: f for f in pool}
@@ -116,7 +138,7 @@ def write_resume_text(analysis: dict, targets: list[dict], pool: list[dict], use
                 draft, attempts = cached["draft"], cached["attempts"]
                 activity.event(uid, "Resume Writer", "Google ADK · cache hit", note="identical facts + job seen before; Verifier re-checked every bullet")
             else:
-                draft, attempts = write_with_verifier(analysis, targets, pool, uid)
+                draft, attempts = _write(analysis, targets, pool, uid, write_with_verifier)
                 _cache_put(key, {"draft": draft, "attempts": attempts})
             for b in draft.get("bullets", []):
                 fid, text = b.get("fact"), str(b.get("text", "")).strip()

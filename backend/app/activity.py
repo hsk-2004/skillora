@@ -41,10 +41,18 @@ def step(uid: int | None, agent: str, tech: str, note: str = ""):
             u = _user(uid)
             u["running"].pop(sid, None)
             u["recent"].append({"id": sid, "agent": agent, "tech": tech, "ms": ms, "state": state, "note": info.get("note", ""), "mode": info.get("mode", ""), "at": time.time()})
+        _audit("agent", agent, tech, info.get("note", ""), state, ms, uid)
+
+
+def _audit(kind, agent, tech, note, state, ms, uid):
+    from .core import audit
+
+    audit.record(uid, kind, agent, f"{tech} - {note}" if note else tech, "error" if state == "error" else "ok", ms)
 
 
 def event(uid: int | None, agent: str, tech: str, note: str = "", mode: str = "") -> None:
     """An instant step (cache hit, a callback that ran inside another call)."""
+    _audit("callback", agent, tech, note, "done", 0, uid)
     if uid is None:
         return
     with _lock:

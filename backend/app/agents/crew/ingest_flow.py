@@ -5,7 +5,7 @@ from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", ".env"))
 
 from app.core.guardrail import check_prompt_injection, wrap_safe_content
 

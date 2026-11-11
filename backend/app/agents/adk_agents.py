@@ -22,6 +22,7 @@ from .. import activity
 from ..engine.verify import verify_bullet
 from ..llm import parse_json, with_models
 from ..vocab import find_skills
+from ..core import guardrail
 
 APP = "skillora"
 USER = "candidate"
@@ -81,6 +82,7 @@ def make_writer(model: str) -> LlmAgent:
         model=model,
         description="Writes resume bullets and a summary using fact IDs only.",
         instruction=WRITER_INSTRUCTION,
+        before_model_callback=guardrail.adk_input_guard,
         after_model_callback=verifier_callback,
         generate_content_config=FAST,
     )
@@ -162,6 +164,7 @@ def make_coordinator(model: str, tools: list) -> LlmAgent:
     )
     return LlmAgent(
         name="coordinator", model=model, instruction=COORDINATOR_INSTRUCTION, tools=tools, sub_agents=[selector], generate_content_config=FAST,
+        before_model_callback=guardrail.adk_input_guard, before_tool_callback=guardrail.adk_tool_guard, after_tool_callback=guardrail.adk_tool_result_guard,
         description="Runs the chat session and delegates to sub-agents.",
     )
 

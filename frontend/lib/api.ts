@@ -1,6 +1,6 @@
 import type { Bullet, Fact, FactStatus, Keyword, Requirement, Source } from "./data";
 
-export const API = process.env.NEXT_PUBLIC_API ?? "http://localhost:8000";
+export const API = process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API ?? "http://localhost:8000";
 
 export interface ScoreComponent { key: string; value: number; color: string; weight: number; why: string; scored?: boolean }
 export interface ScoringProfile { id: string; label: string; desc: string; weights: { K: number; J: number; E: number; Q: number; A: number }; pref_share: number }

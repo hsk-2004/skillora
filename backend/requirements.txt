@@ -14,3 +14,9 @@ crewai
 google-adk
 psycopg[binary]>=3.2
 pyjwt>=2.8
+google-adk[a2a]
+a2a-sdk
+langfuse
+mcp
+openinference-instrumentation-crewai
+openinference-instrumentation-google-adk

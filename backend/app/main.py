@@ -10,6 +10,8 @@ from app.api.system import router as system_router
 from app.config import CORS_ORIGINS
 from app.db import init_db
 from app.parsers import InputRejected
+from app.core import tracing
+from app.core.guardrail import GuardrailViolation
 
 app = FastAPI(
     title="SkillOra API",
@@ -29,6 +31,7 @@ app.add_middleware(
 @app.on_event("startup")
 def _startup() -> None:
     init_db()
+    tracing.init()
 
 
 @app.exception_handler(InputRejected)
@@ -38,6 +41,30 @@ def _rejected(_, e: InputRejected):
         status_code=422,
         media_type="application/json",
     )
+
+
+@app.exception_handler(GuardrailViolation)
+def _guard(_, e: GuardrailViolation):
+    import json as _j
+
+    return Response(content=_j.dumps({"detail": f"Blocked by SkillOra guardrails: {e}", "kind": e.kind}), status_code=422, media_type="application/json")
+
+
+from app.config import A2A_ENABLED  # noqa: E402
+
+_a2a_app = None
+if A2A_ENABLED:  # ADK Resume Writer served over the A2A protocol (requirement 6)
+    from app.a2a.server import build_app
+
+    _a2a_app = build_app()
+
+
+@app.on_event("startup")
+async def _start_a2a() -> None:
+    # Starlette only builds the A2A routes in the sub-app's lifespan, which FastAPI does not run for mounted apps.
+    if _a2a_app is not None:
+        app.state.a2a_ctx = _a2a_app.inner.router.lifespan_context(_a2a_app.inner)
+        await app.state.a2a_ctx.__aenter__()
 
 
 # Mount modular routers
@@ -56,3 +83,7 @@ def root():
         "version": "1.0",
         "docs": "/docs",
     }
+
+
+if _a2a_app is not None:
+    app.mount("/", _a2a_app)  # last: serves /a2a/writer/... (card + JSON-RPC); everything else is handled above

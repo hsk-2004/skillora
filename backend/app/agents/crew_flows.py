@@ -14,6 +14,7 @@ from ..config import MAX_FACTS_PER_SOURCE
 from ..engine.matching import match_all
 from ..llm import crew_llm, parse_json, with_models
 from ..vocab import find_skills
+from ..core import audit, guardrail
 from .rules import validate_facts
 
 
@@ -25,8 +26,12 @@ def _timed(uid, agent: str, tech: str, fn):
 
 def _run(model: str, role: str, goal: str, backstory: str, description: str, expected: str) -> str:
     agent = Agent(role=role, goal=goal, backstory=backstory, llm=crew_llm(model), allow_delegation=False, verbose=False)
-    task = Task(description=description, expected_output=expected, agent=agent)
-    crew = Crew(agents=[agent], tasks=[task], process=Process.sequential, verbose=False)
+    guardrail.check_input_text(description, where=f"CrewAI task · {role}")  # input guard: injection / toxicity
+    task = Task(description=description, expected_output=expected, agent=agent,
+                guardrail=guardrail.crew_json_guardrail("facts" if "facts" in expected else "requirements" if "requirements" in expected else "decisions") if ("JSON" in expected) else None,
+                callback=lambda out: audit.record(None, "callback", f"CrewAI task_callback · {role}", f"task finished, {len(str(out.raw))} chars"))
+    crew = Crew(agents=[agent], tasks=[task], process=Process.sequential, verbose=False,
+                step_callback=lambda step: audit.record(None, "callback", f"CrewAI step_callback · {role}", type(step).__name__))
     return str(crew.kickoff().raw)
 
 
