@@ -7,6 +7,7 @@ import re
 import httpx
 
 from .config import GITHUB_TOKEN, MAX_UPLOAD_MB
+from .core import audit as _audit
 
 ALLOWED = {"pdf", "docx", "pptx", "txt", "md", "zip"}
 
@@ -240,7 +241,7 @@ def _fetch_github(ref: str) -> tuple[str, str, str]:
         if r.status_code == 404:
             raise InputRejected("Repo not found (is it public?).")
         if r.status_code == 403:
-            raise InputRejected("GitHub rate limit hit. Add a GITHUB_TOKEN to backend/.env and retry.")
+            raise InputRejected("GitHub rate limit hit. Add a GITHUB_TOKEN to the root .env file and restart the backend.")
         r.raise_for_status()
         info = r.json()
         # languages + README + every manifest in parallel (one round-trip of latency instead of ~10)
@@ -310,10 +311,11 @@ def _list_user_repos(username: str, limit: int = 100) -> list[dict]:
 
     # Query user profile first to get the exact public_repos count as shown on GitHub
     u_resp = httpx.get(f"{GH}/users/{username}", headers=headers, timeout=25)
+    _audit.record(None, "tool", "Outbound · GitHub API", f"GET /users/{username} -> HTTP {u_resp.status_code}", status="ok" if u_resp.status_code < 400 else "error")
     if u_resp.status_code == 404:
         raise InputRejected(f"GitHub user '{username}' not found.")
     if u_resp.status_code == 403:
-        raise InputRejected("GitHub rate limit hit. Add a GITHUB_TOKEN to backend/.env and retry.")
+        raise InputRejected("GitHub rate limit hit. Add a GITHUB_TOKEN to the root .env file and restart the backend.")
     u_resp.raise_for_status()
     user_info = u_resp.json()
     total_public = user_info.get("public_repos", 0)
@@ -333,7 +335,7 @@ def _list_user_repos(username: str, limit: int = 100) -> list[dict]:
         if r.status_code == 404:
             raise InputRejected(f"GitHub user '{username}' not found.")
         if r.status_code == 403:
-            raise InputRejected("GitHub rate limit hit. Add a GITHUB_TOKEN to backend/.env and retry.")
+            raise InputRejected("GitHub rate limit hit. Add a GITHUB_TOKEN to the root .env file and restart the backend.")
         r.raise_for_status()
         items = r.json()
         if not items or not isinstance(items, list):

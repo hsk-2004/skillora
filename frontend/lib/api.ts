@@ -50,7 +50,7 @@ export interface JobView {
   eligibility?: Eligibility;
   mode: "agent" | "rules";
 }
-export interface ActivityStep { id: number; agent: string; tech: string; note: string; elapsed_ms?: number; ms?: number; state?: string; mode?: string }
+export interface ActivityStep { id: number; agent: string; tech: string; note: string; elapsed_ms?: number; ms?: number; state?: string; mode?: string; api?: string; model?: string; at?: number }
 export interface Activity { running: ActivityStep[]; recent: ActivityStep[]; llm: boolean; model: string; crewai: string; adk: string }
 export interface Profile {
   name: string;
@@ -91,6 +91,9 @@ export interface IngestResult {
 }
 export interface RepoInfo { repo: string; description: string; language: string; stars: number; pushed: string; added: boolean; fork?: boolean; is_owner?: boolean }
 
+export interface AuditEvent { id: number; at: number; kind: string; source: string; note: string; status: string; ms: number; api?: string }
+export interface AuditResult { events: AuditEvent[]; stats: Record<string, number> }
+
 const TOKEN_KEY = "skillora_token";
 export const getToken = () => { try { return localStorage.getItem(TOKEN_KEY) ?? ""; } catch { return ""; } };
 export const setToken = (t: string) => { try { localStorage.setItem(TOKEN_KEY, t); } catch {} };
@@ -130,6 +133,7 @@ export const api = {
   sources: () => call<Source[]>("/api/sources"),
   facts: () => call<Fact[]>("/api/facts"),
   activity: () => call<Activity>("/api/activity", undefined, 4000),
+  audit: (kind?: string) => call<AuditResult>(`/api/audit${kind ? `?kind=${kind}` : ""}`, undefined, 4000),
   profile: () => call<Profile>("/api/profile"),
   resumeExtracted: () => call<ExtractedResumeData>("/api/profile/resume-extracted"),
   eduHint: () => call<{ degree: string; college: string; years: string } | null>("/api/education-hint", undefined, 8000),

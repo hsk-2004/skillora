@@ -15,7 +15,7 @@ _events: deque = deque(maxlen=500)
 
 
 def record(uid: int | None, kind: str, source: str, note: str, status: str = "ok", ms: int = 0, **extra) -> dict:
-    """kind: agent | tool | guardrail | a2a | callback | error"""
+    """kind: api | agent | tool | guardrail | a2a | callback | error"""
     ev = {"id": next(_ids), "at": time.time(), "uid": uid, "kind": kind, "source": source, "note": note[:300],
           "status": status, "ms": ms, **extra}
     with _lock:
@@ -35,7 +35,7 @@ def stats() -> dict:
     with _lock:
         evs = list(_events)
     out: dict = {"total": len(evs)}
-    for k in ("agent", "tool", "guardrail", "a2a", "callback", "error"):
+    for k in ("api", "agent", "tool", "guardrail", "a2a", "callback", "error"):
         out[k] = sum(e["kind"] == k for e in evs)
     out["blocked"] = sum(e["status"] == "blocked" for e in evs)
     return out

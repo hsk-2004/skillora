@@ -1,260 +1,110 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { API } from "@/lib/api";
 import { useStore } from "@/lib/store";
 import RequirementsModal from "@/components/RequirementsModal";
-import AgentPanel from "@/components/AgentPanel";
-
-function IconClipboard({ className = "w-5 h-5" }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-    </svg>
-  );
-}
-
-function IconZap({ className = "w-5 h-5" }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-    </svg>
-  );
-}
-
-function IconScale({ className = "w-5 h-5" }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 6l9-4 9 4m-9-4v20m0 0l-4-4m4 4l4-4M5 10l4 7H1l4-7zm14 0l4 7h-8l4-7z" />
-    </svg>
-  );
-}
-
-function IconDocument({ className = "w-5 h-5" }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-    </svg>
-  );
-}
-
 import AgentArchitectureModal from "@/components/AgentArchitectureModal";
 
-function IconNetwork({ className = "w-3.5 h-3.5" }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM9 20a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2zM7 10v4a2 2 0 002 2h6a2 2 0 002-2v-4" />
-    </svg>
-  );
-}
+type Live = {
+  a2a?: { card?: { name?: string } | null; card_url?: string; calls?: number };
+  tracing?: { enabled?: boolean; dashboard?: string };
+  mcp?: { tools?: number };
+  audit?: { total?: number; blocked?: number; guardrail?: number };
+  deployment?: { platform?: string; public_url?: string; database?: string };
+};
+type Health = { crewai?: string; google_adk?: string; mcp_tools?: number };
 
-function IconInspect({ className = "w-3.5 h-3.5" }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-    </svg>
-  );
-}
+type Card = {
+  n: number;
+  title: string;
+  text: string;
+  badge?: string;
+  ok?: boolean;
+  action: { label: string; href?: string; external?: boolean; onClick?: () => void };
+};
 
 export default function FacultyPage() {
   const st = useStore();
-  const [showRequirements, setShowRequirements] = useState(false);
-  const [showAgentPanel, setShowAgentPanel] = useState(false);
-  const [showArchitectureModal, setShowArchitectureModal] = useState(false);
+  const [live, setLive] = useState<Live | null>(null);
+  const [health, setHealth] = useState<Health | null>(null);
+  const [showReq, setShowReq] = useState(false);
+  const [showArch, setShowArch] = useState(false);
+
+  useEffect(() => {
+    fetch(`${API}/api/compliance`).then((r) => r.json()).then(setLive).catch(() => setLive(null));
+    fetch(`${API}/api/health`).then((r) => r.json()).then(setHealth).catch(() => setHealth(null));
+  }, []);
+
+  const cards: Card[] = [
+    { n: 1, title: "Context sharing", text: "Agents pass results through shared state.", badge: `${st.facts.length} facts in ledger`, ok: true,
+      action: { label: "Open fact ledger", href: "/verify" } },
+    { n: 2, title: "MCP tools", text: "Parser, database, GitHub and score tools.", badge: `${live?.mcp?.tools ?? health?.mcp_tools ?? 4} tools`, ok: true,
+      action: { label: "View tools", href: `${API}/api/mcp/tools`, external: true } },
+    { n: 3, title: "Structured output", text: "Every result follows a Pydantic schema.", badge: "Pydantic", ok: true,
+      action: { label: "API schemas", href: `${API}/docs`, external: true } },
+    { n: 4, title: "Agentic patterns", text: "Verifier loop, human review, router.", badge: "3 patterns", ok: true,
+      action: { label: "See the flow", onClick: () => setShowArch(true) } },
+    { n: 5, title: "Monitoring and callbacks", text: "Every step and error is logged.", badge: `${live?.audit?.total ?? 0} events`, ok: true,
+      action: { label: "Live logs", href: "/logs" } },
+    { n: 6, title: "A2A protocol", text: "CrewAI calls the Google ADK writer.", badge: live?.a2a?.card ? "Agent card live" : "Not reachable", ok: !!live?.a2a?.card,
+      action: { label: "Agent card", href: live?.a2a?.card_url ?? "#", external: true } },
+    { n: 7, title: "CrewAI + Google ADK", text: "Only these two frameworks are used.", badge: `CrewAI ${health?.crewai ?? ""} · ADK`, ok: !!health,
+      action: { label: "See the agents", onClick: () => setShowArch(true) } },
+    { n: 8, title: "Guardrails", text: "Blocks prompt injection and abusive input.", badge: `${live?.audit?.blocked ?? 0} blocked`, ok: true,
+      action: { label: "Try it", onClick: () => setShowReq(true) } },
+    { n: 9, title: "Tracing (Langfuse)", text: "Every agent run is traced.", badge: live?.tracing?.enabled ? "Connected" : "Not configured", ok: !!live?.tracing?.enabled,
+      action: { label: "Open Langfuse", href: live?.tracing?.dashboard ?? "https://cloud.langfuse.com", external: true } },
+    { n: 10, title: "Evaluation, cost and time", text: "Accuracy, latency and cost per resume.", badge: "Live run", ok: true,
+      action: { label: "Run evaluation", onClick: () => setShowReq(true) } },
+    { n: 11, title: "Cloud deployment", text: "Backend and frontend run online.", badge: live?.deployment ? `${live.deployment.platform} · ${live.deployment.database}` : "", ok: !!live,
+      action: { label: "Open live site", href: live?.deployment?.public_url ?? "#", external: true } },
+  ];
+
+  const btn = "w-full py-2 rounded-xl text-xs font-bold border border-[#C5E1CB] bg-[#EAF4EB] hover:bg-[#D5EBD7] text-[#1E6B38] text-center cursor-pointer transition-all";
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto">
-      
-      {/* Header section */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#1E6B38] bg-[#EAF4EB] px-2.5 py-0.5 rounded-full border border-[#C5E1CB] flex items-center gap-1.5">
-              <IconInspect className="w-3.5 h-3.5 text-[#1E6B38]" />
-              <span>System Architecture &amp; Verification</span>
-            </span>
-            <span className="text-xs text-[#78827A]">Core Infrastructure &amp; Systems Inspection</span>
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-serif font-normal text-[#141A16] tracking-tight">
-            System Architecture &amp; Verification
-          </h1>
-          <p className="text-sm text-[#556056] max-w-2xl leading-relaxed">
-            Technical inspection portal for system architecture. Verify multi-agent orchestration, deterministic fact grounding, prompt injection guardrails, and MCP tool servers.
-          </p>
-        </div>
-
+    <div className="max-w-6xl mx-auto space-y-8">
+      <div className="flex items-end justify-between gap-4 flex-wrap">
+        <h1 className="text-3xl sm:text-4xl font-serif text-[#141A16] tracking-tight">System Overview</h1>
         <div className="flex items-center gap-2.5 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setShowArchitectureModal(true)}
-            className="px-4 py-2.5 bg-[#EAF4EB] hover:bg-[#D5EBD7] text-[#1E6B38] border border-[#C5E1CB] rounded-full font-bold text-xs shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <IconNetwork className="w-3.5 h-3.5 text-[#1E6B38]" />
-            <span>Agent Architecture &amp; Flowcharts</span>
+          <button onClick={() => setShowReq(true)} className="px-4 py-2.5 rounded-full bg-[#EAF4EB] text-[#1E6B38] border border-[#C5E1CB] font-bold text-xs cursor-pointer">
+            All 11 requirements
           </button>
-
-          <Link
-            href="/job"
-            className="px-5 py-2.5 bg-[#121614] hover:bg-black text-white rounded-full font-bold text-xs sm:text-sm shadow-md transition-all shrink-0 flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
-          >
-            <span>← Back to Workspace</span>
-          </Link>
+          <Link href="/job" className="px-5 py-2.5 rounded-full bg-[#121614] text-white font-bold text-xs">← Back to Workspace</Link>
         </div>
       </div>
 
-      {/* 4 Technical Pillar Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        
-        {/* Card 1: Requirements */}
-        <div className="bg-white p-6 rounded-2xl border border-[#ECE7DD] shadow-[0_2px_14px_rgba(0,0,0,0.02)] space-y-4 flex flex-col justify-between">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="p-2 rounded-xl bg-[#EAF4EB] text-[#1E6B38]">
-                <IconClipboard className="w-5 h-5 text-[#1E6B38]" />
-              </span>
-              <span className="text-[10px] font-bold text-[#1E6B38] bg-[#EAF4EB] px-2 py-0.5 rounded-full border border-[#C5E1CB]">
-                Compliance Matrix
-              </span>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {cards.map((c) => (
+          <div key={c.n} className="bg-white p-5 rounded-2xl border border-[#ECE7DD] flex flex-col justify-between gap-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="w-7 h-7 rounded-lg bg-[#EAF4EB] text-[#1E6B38] font-bold text-xs flex items-center justify-center border border-[#C5E1CB]">{c.n}</span>
+                {c.badge && (
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1.5 ${c.ok ? "text-[#1E6B38] bg-[#EAF4EB] border-[#C5E1CB]" : "text-[#B45309] bg-amber-50 border-amber-200"}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${c.ok ? "bg-emerald-500" : "bg-amber-500"}`} />
+                    {c.badge}
+                  </span>
+                )}
+              </div>
+              <h3 className="text-base font-serif font-bold text-[#141A16]">{c.title}</h3>
+              <p className="text-xs text-[#556056]">{c.text}</p>
             </div>
-            <h3 className="text-base font-serif font-bold text-[#141A16]">
-              Requirements
-            </h3>
-            <p className="text-xs text-[#556056] leading-relaxed">
-              Complete traceability matrix mapping every requirement (Dual Frameworks, MCP, Grounding, Guardrails, LangFuse) directly to implementation files.
-            </p>
+            {c.action.onClick ? (
+              <button type="button" onClick={c.action.onClick} className={btn}>{c.action.label}</button>
+            ) : c.action.external ? (
+              <a href={c.action.href} target="_blank" rel="noopener noreferrer" className={btn}>{c.action.label} ↗</a>
+            ) : (
+              <Link href={c.action.href ?? "#"} className={btn}>{c.action.label} →</Link>
+            )}
           </div>
-
-          <button
-            type="button"
-            onClick={() => setShowRequirements(true)}
-            className="w-full py-2.5 rounded-xl bg-[#EAF4EB] hover:bg-[#D5EBD7] text-[#1E6B38] font-bold text-xs border border-[#C5E1CB] transition-all cursor-pointer flex items-center justify-center gap-1.5"
-          >
-            <span>Open Requirements</span>
-            <span>→</span>
-          </button>
-        </div>
-
-        {/* Card 2: Dual Multi-Agent Telemetry */}
-        <div className="bg-white p-6 rounded-2xl border border-[#ECE7DD] shadow-[0_2px_14px_rgba(0,0,0,0.02)] space-y-4 flex flex-col justify-between">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="p-2 rounded-xl bg-emerald-50 text-emerald-800">
-                <IconZap className="w-5 h-5 text-emerald-700" />
-              </span>
-              <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                CrewAI + Google ADK
-              </span>
-            </div>
-            <h3 className="text-base font-serif font-bold text-[#141A16]">
-              Agent Telemetry &amp; Execution
-            </h3>
-            <p className="text-xs text-[#556056] leading-relaxed">
-              Inspect real-time agent execution traces, CrewAI flow orchestrations, Google ADK resume synthesis, and evaluator-optimizer loops.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setShowAgentPanel(!showAgentPanel)}
-            className="w-full py-2.5 rounded-xl bg-white hover:bg-[#FAF9F5] text-[#141A16] font-bold text-xs border border-[#DDD7CA] transition-all cursor-pointer flex items-center justify-center gap-1.5"
-          >
-            <span>{showAgentPanel ? "Hide Agent Telemetry Drawer" : "Open Agent Telemetry Drawer"}</span>
-          </button>
-        </div>
-
-        {/* Card 3: Fact Ledger & Citation Grounding */}
-        <div className="bg-white p-6 rounded-2xl border border-[#ECE7DD] shadow-[0_2px_14px_rgba(0,0,0,0.02)] space-y-4 flex flex-col justify-between">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="p-2 rounded-xl bg-[#EAF4EB] text-[#1E6B38]">
-                <IconScale className="w-5 h-5 text-[#1E6B38]" />
-              </span>
-              <span className="text-[10px] font-bold text-[#1E6B38] bg-[#EAF4EB] px-2 py-0.5 rounded-full border border-[#C5E1CB]">
-                {st.facts.length} Verified Claims
-              </span>
-            </div>
-            <h3 className="text-base font-serif font-bold text-[#141A16]">
-              Verifiable Career Fact Ledger
-            </h3>
-            <p className="text-xs text-[#556056] leading-relaxed">
-              Relational SQLite fact store storing verbatim character-offset citations. Human-in-the-loop review and callback verification.
-            </p>
-          </div>
-
-          <Link
-            href="/verify"
-            className="w-full py-2.5 rounded-xl bg-[#FAF9F5] hover:bg-[#EAF4EB] text-[#1E6B38] font-bold text-xs border border-[#ECE7DD] transition-all flex items-center justify-center gap-1.5"
-          >
-            <span>Inspect Fact Ledger Engine</span>
-            <span>→</span>
-          </Link>
-        </div>
-
-        {/* Card 4: Source Ingestion & MCP Tools */}
-        <div className="bg-white p-6 rounded-2xl border border-[#ECE7DD] shadow-[0_2px_14px_rgba(0,0,0,0.02)] space-y-4 flex flex-col justify-between">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="p-2 rounded-xl bg-indigo-50 text-indigo-700">
-                <IconDocument className="w-5 h-5 text-indigo-700" />
-              </span>
-              <span className="text-[10px] font-bold text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
-                FastMCP (4 Tools)
-              </span>
-            </div>
-            <h3 className="text-base font-serif font-bold text-[#141A16]">
-              Source Parsers &amp; MCP Protocol
-            </h3>
-            <p className="text-xs text-[#556056] leading-relaxed">
-              Multi-modal document extraction (PDF, DOCX, PPTX), GitHub repository crawling, prompt injection guardrails, and Model Context Protocol server.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Link
-              href="/sources"
-              className="flex-1 py-2.5 rounded-xl bg-[#FAF9F5] hover:bg-[#EAF4EB] text-[#141A16] font-bold text-xs border border-[#ECE7DD] transition-all text-center"
-            >
-              Source Ingestion
-            </Link>
-            <a
-              href="http://127.0.0.1:8000/api/mcp/tools"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1 py-2.5 rounded-xl bg-[#1E6B38] hover:bg-[#16532B] text-white font-bold text-xs transition-all text-center shadow-xs"
-            >
-              MCP API (JSON) ↗
-            </a>
-          </div>
-        </div>
-
+        ))}
       </div>
 
-      {/* Embedded Agent Drawer if toggled */}
-      {showAgentPanel && (
-        <div className="p-6 rounded-2xl bg-white border border-[#1E6B38]/30 shadow-md space-y-4">
-          <div className="flex items-center justify-between border-b border-[#ECE7DD] pb-3">
-            <h4 className="text-base font-serif font-bold text-[#141A16]">Live Multi-Agent Telemetry Stream</h4>
-            <button
-              onClick={() => setShowAgentPanel(false)}
-              className="text-xs text-[#78827A] hover:text-[#141A16]"
-            >
-              ✕ Close
-            </button>
-          </div>
-          <AgentPanel />
-        </div>
-      )}
-
-      {/* 11 Requirements Modal */}
-      {showRequirements && (
-        <RequirementsModal isOpen={showRequirements} onClose={() => setShowRequirements(false)} />
-      )}
-
-      {/* Agent Architecture & Flowcharts Modal */}
-      {showArchitectureModal && (
-        <AgentArchitectureModal isOpen={showArchitectureModal} onClose={() => setShowArchitectureModal(false)} />
-      )}
-
+      {showReq && <RequirementsModal isOpen={showReq} onClose={() => setShowReq(false)} />}
+      {showArch && <AgentArchitectureModal isOpen={showArch} onClose={() => setShowArch(false)} />}
     </div>
   );
 }

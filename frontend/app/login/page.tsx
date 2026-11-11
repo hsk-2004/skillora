@@ -10,9 +10,9 @@ import Ambient from "@/components/Ambient";
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<"login" | "signup">("login");
-  const [name, setName] = useState("Palak Bhatt");
-  const [email, setEmail] = useState("palak@skillora.ai");
-  const [password, setPassword] = useState("skillora2026");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -30,10 +30,10 @@ export default function LoginPage() {
           ? await api.signup(email, password, name)
           : await api.login(email, password);
       setToken(r.token);
-      router.replace("/sources");
+      window.location.href = "/sources"; // full reload so no data from a previous account stays in memory
+      return;
     } catch (err: unknown) {
-      // In demo mode or if offline, still grant immediate access
-      router.replace("/sources");
+      setError(err instanceof Error ? err.message : "Login failed. Check your email and password.");
     } finally {
       setBusy(false);
     }

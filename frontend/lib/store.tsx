@@ -128,14 +128,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const h = await api.health();
         let tok = getToken();
         if (!tok) {
-          try {
-            const r = await api.login("palak@skillora.ai", "skillora2026");
-            setToken(r.token);
-            tok = r.token;
-          } catch {
-            router.replace("/login");
-            return;
-          }
+          router.replace("/login"); // no saved login: ask the user to sign in (never auto-login as someone else)
+          return;
         }
         setLive(true);
         setLlm(h.llm);
@@ -183,7 +177,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     return {
       live, ready, busy, error, notice, llm, profile,
-      logout: () => { clearToken(); router.replace("/login"); },
+      logout: () => { clearToken(); window.location.href = "/login"; },
       saveProfile: async (p) => { setProfile(p); if (live) await run("Saving", () => api.saveProfile(p)); },
 
       sources,

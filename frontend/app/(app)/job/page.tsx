@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import ScoreRing from "@/components/ScoreRing";
+import LiveRunPanel from "@/components/LiveRunPanel";
 import { useStore } from "@/lib/store";
 
 // =========================================================================
@@ -489,42 +490,12 @@ export default function JobPage() {
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
-      {/* Active Agent Banner: CrewAI JD Analyzer & Matcher */}
-      <div className="p-3.5 rounded-2xl bg-[#FAF9F5] border border-[#DDD7CA] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2.5">
-          <span className="p-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200">
-            <IconSparkles className="w-4 h-4 text-emerald-700" />
-          </span>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-[#141A16]">Active Agents on This Stage: CrewAI JD Analyzer &amp; Requirement Matcher</span>
-              <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                CrewAI 1.10
-              </span>
-            </div>
-            <p className="text-[#556056] text-[11px] mt-0.5">
-              JD Analyzer extracts must/nice criteria; Matcher links requirements to fact ledger via exact matching, RapidFuzz, and semantic embeddings.
-            </p>
-          </div>
-        </div>
-
-        <Link
-          href="/faculty"
-          className="px-3.5 py-1.5 bg-white hover:bg-[#FAF9F5] text-[#1E6B38] border border-[#C5E1CB] font-bold text-xs rounded-full shadow-2xs transition-all shrink-0 self-start sm:self-auto flex items-center gap-1 cursor-pointer"
-        >
-          <span>System Architecture</span>
-          <span>→</span>
-        </Link>
-      </div>
 
       {/* Workspace Header */}
       <div className="text-center space-y-1.5 max-w-2xl mx-auto">
         <h1 className="text-3xl sm:text-4xl font-serif font-normal text-[#141A16] tracking-tight">
           Resume Match &amp; Analysis
         </h1>
-        <p className="text-sm text-[#556056] leading-relaxed">
-          Match your resume or profile against any target job opportunity with zero-hallucination verification.
-        </p>
       </div>
 
       {/* Upload & Info Notice */}
@@ -626,9 +597,6 @@ export default function JobPage() {
                   <h3 className="text-base font-serif font-bold text-[#141A16]">
                     1. Resume Source
                   </h3>
-                  <p className="text-xs text-[#556056]">
-                    Choose how you want to provide your candidate resume data.
-                  </p>
                 </div>
               </div>
 
@@ -657,9 +625,6 @@ export default function JobPage() {
                   </div>
                   <div className="mt-3">
                     <h4 className="text-xs font-bold text-[#141A16]">Use My Profile</h4>
-                    <p className="text-[11px] text-[#556056] mt-1 leading-snug">
-                      Use your verified profile data (skills, projects, experience, education).
-                    </p>
                   </div>
                 </div>
 
@@ -686,9 +651,6 @@ export default function JobPage() {
                   </div>
                   <div className="mt-3">
                     <h4 className="text-xs font-bold text-[#141A16]">Upload Resume</h4>
-                    <p className="text-[11px] text-[#556056] mt-1 leading-snug">
-                      Upload a PDF or DOCX resume document for this analysis.
-                    </p>
                   </div>
                 </div>
               </div>
@@ -710,7 +672,6 @@ export default function JobPage() {
                     <p className="text-xs font-bold text-[#141A16]">
                       {selectedResumeFile ? selectedResumeFile : "Drop resume file or browse"}
                     </p>
-                    <p className="text-[10px] text-[#78827A]">Supports PDF or DOCX candidate resumes</p>
                   </div>
                   <button
                     type="button"
@@ -727,9 +688,8 @@ export default function JobPage() {
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="font-bold text-[#78827A] uppercase tracking-wider flex items-center gap-1.5">
                     <IconShield className="w-3.5 h-3.5 text-[#1E6B38]" />
-                    <span>Security &amp; Relevance Test Documents:</span>
+                    <span>Try a test file</span>
                   </span>
-                  <span className="text-[10px] text-[#78827A]">3-Way Verification Showcase</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                   {/* Test 1: Subject Lecture PPT */}
@@ -749,9 +709,6 @@ export default function JobPage() {
                         <span>PPTX</span>
                       </a>
                     </div>
-                    <p className="text-[10px] text-amber-800 leading-tight">
-                      Course slides (CS 401 OS). Quarantined by Relevance Guardrail (HTTP 422).
-                    </p>
                     <button
                       type="button"
                       onClick={() => handleTestResumeFile("sample_subject_lecture.pptx")}
@@ -789,9 +746,6 @@ export default function JobPage() {
                         <span>PDF</span>
                       </a>
                     </div>
-                    <p className="text-[10px] text-rose-700 leading-tight">
-                      Adversarial override payload. Blocked by Safety Guardrail (HTTP 422).
-                    </p>
                     <button
                       type="button"
                       onClick={() => handleTestResumeFile("adversarial_prompt_injection_resume.pdf")}
@@ -829,9 +783,6 @@ export default function JobPage() {
                         <span>PDF</span>
                       </a>
                     </div>
-                    <p className="text-[10px] text-[#556056] leading-tight">
-                      Legitimate production AI/ML resume. 25 verified facts admitted to ledger.
-                    </p>
                     <button
                       type="button"
                       onClick={() => handleTestResumeFile("sample_aiml_resume.pdf")}
@@ -854,14 +805,6 @@ export default function JobPage() {
                 </div>
               </div>
             </div>
-
-            {/* Bottom Info Banner */}
-            <div className="p-3 rounded-xl bg-[#EAF4EB] border border-[#C5E1CB] flex items-center gap-2.5 text-xs text-[#1E6B38]">
-              <IconShield className="w-4 h-4 shrink-0" />
-              <p className="text-[11px] leading-relaxed">
-                Candidate ledger contains verified claims with strict cryptographic provenance.
-              </p>
-            </div>
           </div>
 
           {/* Plus Connector Badge (centered between cards on desktop) */}
@@ -881,9 +824,6 @@ export default function JobPage() {
                   <h3 className="text-base font-serif font-bold text-[#141A16]">
                     2. Job Description
                   </h3>
-                  <p className="text-xs text-[#556056]">
-                    Provide the target job description or choose a test preset below.
-                  </p>
                 </div>
               </div>
 
@@ -893,7 +833,6 @@ export default function JobPage() {
                   <span className="font-bold text-[#78827A] uppercase tracking-wider">
                     Select a Preset Job Description:
                   </span>
-                  <span className="text-[10px] text-[#78827A]">1-Click Load</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {samplePresets.map((p) => {
@@ -977,16 +916,13 @@ export default function JobPage() {
                     }}
                     rows={6}
                     maxLength={10000}
-                    placeholder="Paste the target job description here, or click one of the 3 presets above..."
+                    placeholder="Paste the job description…"
                     className="w-full p-3.5 rounded-xl border border-[#E5E1D5] bg-[#FAF9F6] text-xs font-mono text-[#141A16] placeholder:text-[#9DA69E] focus:outline-none focus:border-[#1E6B38] focus:bg-white transition-all leading-relaxed resize-none"
                   />
 
                   {/* Character Counter */}
                   <div className="flex items-center justify-between text-[11px] text-[#78827A] pt-0.5">
                     <span>{jd.length}/10,000 characters</span>
-                    <span className="text-[#556056] font-medium">
-                      Multi-agent reasoning with CrewAI &amp; ADK
-                    </span>
                   </div>
                 </div>
               ) : (
@@ -1043,6 +979,8 @@ export default function JobPage() {
             )}
           </button>
         </div>
+
+        <LiveRunPanel active={busy} />
       </div>
 
       {/* ========================================================================= */}

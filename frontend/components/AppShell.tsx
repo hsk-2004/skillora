@@ -11,7 +11,7 @@ import AgentArchitectureModal from "./AgentArchitectureModal";
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const path = usePathname();
-  const { busy, error, notice, mode, profile } = useStore();
+  const { busy, error, notice, mode, profile, logout } = useStore();
   const [showAgentModal, setShowAgentModal] = useState(false);
 
   return (
@@ -54,6 +54,14 @@ export default function AppShell({ children }: { children: ReactNode }) {
             </button>
 
             <Link
+              href="/logs"
+              className="text-xs font-semibold text-[#556056] hover:text-[#1E6B38] px-3 py-1.5 rounded-full hover:bg-white border border-transparent hover:border-[#E5E1D5] transition-all hidden md:flex items-center gap-1.5"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Live Logs</span>
+            </Link>
+
+            <Link
               href="/faculty"
               className="text-xs font-semibold text-[#556056] hover:text-[#1E6B38] px-3 py-1.5 rounded-full hover:bg-white border border-transparent hover:border-[#E5E1D5] transition-all hidden md:flex items-center gap-1.5"
               title="System Architecture & Verification"
@@ -82,6 +90,18 @@ export default function AppShell({ children }: { children: ReactNode }) {
                 <p className="text-[10px] text-[#6B756E] leading-tight">Candidate Profile</p>
               </div>
             </Link>
+
+            <button
+              type="button"
+              onClick={logout}
+              className="text-xs font-semibold text-[#556056] hover:text-rose-700 px-3 py-2 rounded-full bg-white border border-[#E5E1D5] hover:border-rose-200 transition-all flex items-center gap-1.5 cursor-pointer"
+              title="Log out"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
+              </svg>
+              <span className="hidden sm:inline">Log out</span>
+            </button>
           </div>
 
         </div>
@@ -127,6 +147,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-4">
             <Link href="/job" className="hover:text-[#141A16] hover:underline">Workspace</Link>
             <Link href="/profile" className="hover:text-[#141A16] hover:underline">Candidate Profile</Link>
+            <Link href="/logs" className="hover:text-[#141A16] hover:underline">Live Logs</Link>
             <Link href="/faculty" className="hover:text-[#141A16] hover:underline">System Architecture</Link>
           </div>
         </div>

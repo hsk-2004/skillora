@@ -190,7 +190,9 @@ def recommendations(analysis: dict, facts: list[dict], resume: dict, projects: l
     # 2. Verified grounded keyword rewrites (Direct ATS match with JD)
     for k in [k for k in keywords if k.get("state") == "suggested"][:3]:
         fact_obj = by_id.get(k.get("fact"))
-        proj_name = fact_obj.get("project", "SkillOra") if fact_obj else "SkillOra"
+        if not fact_obj:  # the fact behind this suggestion was deleted (e.g. its source was removed) - skip it
+            continue
+        proj_name = fact_obj.get("project", "SkillOra")
         fact_text = fact_obj.get("text") or fact_obj.get("span") or k.get("rewrite", "")
         bullet_text = k.get("rewrite") or fact_text
         recs.append({

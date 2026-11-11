@@ -28,6 +28,31 @@ app.add_middleware(
 )
 
 
+_QUIET = ("/api/audit", "/api/activity", "/api/health", "/api/compliance", "/docs", "/openapi.json")
+
+
+@app.middleware("http")
+async def _log_requests(request, call_next):
+    """Audit trail: every API call (method, path, status, duration). Polling endpoints are skipped so the log stays readable."""
+    import time as _t
+
+    from app.core import audit
+
+    path = request.url.path
+    if request.method == "OPTIONS" or path == "/" or path.startswith(_QUIET):
+        return await call_next(request)
+    t0 = _t.time()
+    try:
+        resp = await call_next(request)
+    except Exception as e:  # noqa: BLE001
+        audit.record(None, "error", f"{request.method} {path}", f"unhandled: {e}"[:200], status="error", ms=int((_t.time() - t0) * 1000))
+        raise
+    kind = "a2a" if path.startswith("/a2a/") else "api"
+    audit.record(None, kind, f"{request.method} {path}", f"HTTP {resp.status_code}", status="ok" if resp.status_code < 400 else "error",
+                 ms=int((_t.time() - t0) * 1000))
+    return resp
+
+
 @app.on_event("startup")
 def _startup() -> None:
     init_db()

@@ -236,5 +236,5 @@ def compliance():
         "tracing": {**tr, "dashboard": config.LANGFUSE_HOST},
         "mcp": {"tools": len(list_mcp_tools())},
         "audit": st,
-        "deployment": {"platform": "Railway", "public_url": config.PUBLIC_URL, "database": "PostgreSQL" if config.DB_URL.startswith("postgres") else "SQLite"},
+        "deployment": {"platform": "Render" if __import__("os").getenv("RENDER") else "Local", "public_url": config.PUBLIC_URL, "database": "PostgreSQL" if config.DB_URL.startswith("postgres") else "SQLite"},
     }

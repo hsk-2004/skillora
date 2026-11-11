@@ -1,12 +1,14 @@
 """Small helpers shared by the CrewAI and ADK sides: JSON recovery + Gemini model fallback chain."""
 import json
 import re
+import threading
 import time
 from typing import Callable, TypeVar
 
 from .config import GEMINI_API_KEY, GEMINI_MODELS, LLM_TIMEOUT, USE_LLM
 
 T = TypeVar("T")
+_used = threading.local()  # model that handled the current thread's last LLM call (read by activity.py)
 
 
 def parse_json(text: str):
@@ -42,6 +44,7 @@ def with_models(fn: Callable[[str], T]) -> T:
     for attempt in range(2):  # free-tier models often return 503 "high demand": second pass after a short wait
         for m in GEMINI_MODELS:
             try:
+                _used.model = m
                 return fn(m)
             except Exception as e:  # noqa: BLE001 - any provider/framework error -> next model
                 last = e

@@ -559,17 +559,24 @@ export default function ProfilePage() {
       ),
     [facts]
   );
-  const expFacts = useMemo(
-    () =>
-      facts.filter(
-        (f) =>
-          f.category === "experience" &&
-          (!f.project ||
-            f.project.toLowerCase() === "general" ||
-            f.source?.toLowerCase().includes("resume"))
-      ),
-    [facts]
-  );
+  const expFacts = useMemo(() => {
+    const roleFacts = facts.filter((f) => f.kind === "role");
+    if (roleFacts.length) return roleFacts; // facts the parser placed under a work / internship section
+    return facts.filter(
+      (f) =>
+        f.category === "experience" &&
+        (!f.project || f.project.toLowerCase() === "general" || f.source?.toLowerCase().includes("resume"))
+    );
+  }, [facts]);
+  // one group per role (job / internship), so the tab counts roles, not individual bullets
+  const expGroups = useMemo(() => {
+    const m = new Map<string, Fact[]>();
+    for (const f of expFacts) {
+      const k = f.project && f.project.toLowerCase() !== "general" ? f.project : "Other experience";
+      m.set(k, [...(m.get(k) ?? []), f]);
+    }
+    return Array.from(m.entries());
+  }, [expFacts]);
 
   // Build Project Cards structured into: Description, Core Features, Results Achieved, Tech Stack
   interface ProjectCardItem {
@@ -997,9 +1004,10 @@ export default function ProfilePage() {
 
   // Remove uploaded resume
   const handleRemoveResume = async () => {
-    const resumeSource = sources.find(
-      (s) => s.type === "pdf" || s.type === "docx" || s.name === selectedResumeFile
-    );
+    // remove the file that is shown (match by name first), not just the first PDF in the list
+    const resumeSource =
+      sources.find((s) => s.name === selectedResumeFile) ??
+      sources.find((s) => s.type === "pdf" || s.type === "docx");
     if (resumeSource) {
       try {
         await removeSource(resumeSource.id);
@@ -1399,16 +1407,6 @@ export default function ProfilePage() {
                   {step === 3 && "Select your relevant projects"}
                   {step === 4 && "Review and verify your information"}
                 </h4>
-                <p className="text-[10px] text-[#556056] leading-snug">
-                  {step === 1 &&
-                    "We'll extract your details, find your GitHub projects, and build your verified profile automatically."}
-                  {step === 2 &&
-                    "Please review and edit the information before we proceed to your projects."}
-                  {step === 3 &&
-                    "Choose the repositories you want to include in your profile. We'll extract verified information from them."}
-                  {step === 4 &&
-                    "We've extracted facts from your resume and selected projects. Please review and verify them before we complete your profile."}
-                </p>
               </div>
             </div>
           </div>
@@ -1424,10 +1422,6 @@ export default function ProfilePage() {
                   <h2 className="text-3xl sm:text-4xl font-serif font-normal text-[#141A16] tracking-tight">
                     Let&apos;s set up your profile
                   </h2>
-                  <p className="text-xs sm:text-sm text-[#556056] leading-relaxed">
-                    Upload your resume and connect your GitHub to automatically create
-                    your profile with verified information.
-                  </p>
                 </div>
 
                 {/* 2 Side-by-side Cards */}
@@ -1455,10 +1449,6 @@ export default function ProfilePage() {
                           <h3 className="text-sm font-serif font-bold text-[#141A16]">
                             1. Upload Your Resume
                           </h3>
-                          <p className="text-[11px] text-[#556056]">
-                            We&apos;ll extract your personal details, education,
-                            skills, and experience automatically.
-                          </p>
                         </div>
                       </div>
 
@@ -1510,7 +1500,7 @@ export default function ProfilePage() {
                             Upload your resume
                           </p>
                           <p className="text-[11px] text-[#78827A]">
-                            Drag and drop a PDF or DOCX file, or click anywhere to browse
+                            Drop a PDF or DOCX here, or click
                           </p>
                         </div>
                         <div className="pt-1">
@@ -1600,7 +1590,7 @@ export default function ProfilePage() {
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="font-bold text-[#78827A] uppercase tracking-wider flex items-center gap-1.5">
                           <IconShield className="w-3.5 h-3.5 text-[#1E6B38]" />
-                          <span>Security &amp; Demo Resumes:</span>
+                          <span>Try a test file</span>
                         </span>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
@@ -1620,9 +1610,6 @@ export default function ProfilePage() {
                               <span>PPTX</span>
                             </a>
                           </div>
-                          <p className="text-[10px] text-amber-800 leading-tight">
-                            Course slides (CS 401). Quarantined by Relevance Guardrail (HTTP 422).
-                          </p>
                           <button
                             type="button"
                             onClick={() => handleTestResumePreset("sample_subject_lecture.pptx")}
@@ -1649,9 +1636,6 @@ export default function ProfilePage() {
                               <span>PDF</span>
                             </a>
                           </div>
-                          <p className="text-[10px] text-rose-700 leading-tight">
-                            Adversarial override payload. Quarantined by Safety Guardrail.
-                          </p>
                           <button
                             type="button"
                             onClick={() => handleTestResumePreset("adversarial_prompt_injection_resume.pdf")}
@@ -1678,9 +1662,6 @@ export default function ProfilePage() {
                               <span>PDF</span>
                             </a>
                           </div>
-                          <p className="text-[10px] text-[#556056] leading-tight">
-                            Clean AI/ML resume. Extracted facts verified into ledger.
-                          </p>
                           <button
                             type="button"
                             onClick={() => handleTestResumePreset("sample_aiml_resume.pdf")}
@@ -1715,38 +1696,7 @@ export default function ProfilePage() {
                           <h3 className="text-sm font-serif font-bold text-[#141A16]">
                             2. Connect Your GitHub
                           </h3>
-                          <p className="text-[11px] text-[#556056]">
-                            We&apos;ll fetch your repositories and extract project
-                            details, tech stacks, and achievements.
-                          </p>
                         </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => fetchRepos(githubUser)}
-                        disabled={githubLoading || !githubUser.trim()}
-                        className="w-full py-2.5 px-4 rounded-xl bg-[#EAF4EB] hover:bg-[#D5EBD7] text-[#1E6B38] font-bold text-xs border border-[#C5E1CB] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-50"
-                      >
-                        <svg
-                          className="w-4 h-4"
-                          fill="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            clipRule="evenodd"
-                            d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
-                          />
-                        </svg>
-                        <span>Connect with GitHub</span>
-                        <IconArrowRight className="w-3.5 h-3.5" />
-                      </button>
-
-                      <div className="flex items-center gap-2 text-[10px] text-[#A3ABA5] my-1">
-                        <div className="flex-1 h-px bg-[#ECE7DD]" />
-                        <span>or</span>
-                        <div className="flex-1 h-px bg-[#ECE7DD]" />
                       </div>
 
                       <div className="space-y-1.5">
@@ -1852,9 +1802,6 @@ export default function ProfilePage() {
                   <h2 className="text-3xl sm:text-4xl font-serif font-normal text-[#141A16] tracking-tight">
                     Review Your Details
                   </h2>
-                  <p className="text-xs sm:text-sm text-[#556056] leading-relaxed">
-                    We&apos;ve extracted the following information from your resume. Please review and edit if needed.
-                  </p>
                 </div>
 
                 {/* 2x2 Clean Cards Grid */}
@@ -2309,10 +2256,6 @@ export default function ProfilePage() {
                   <h2 className="text-3xl sm:text-4xl font-serif font-normal text-[#141A16] tracking-tight">
                     Select Your GitHub Projects
                   </h2>
-                  <p className="text-xs sm:text-sm text-[#556056] leading-relaxed">
-                    We found {repos.length} repositories on your GitHub ({githubUser}).
-                    Select the ones you want to include in your profile.
-                  </p>
                 </div>
 
                 {/* Account Card with Change Account */}
@@ -2567,9 +2510,6 @@ export default function ProfilePage() {
                     <h2 className="text-3xl sm:text-4xl font-serif font-normal text-[#141A16] tracking-tight">
                       Verify Your Information
                     </h2>
-                    <p className="text-xs sm:text-sm text-[#556056] leading-relaxed">
-                      Verify your extracted profile project-by-project. Inspect and refine the four key resume sections: Description, Core Features, Results Achieved, and Tech Stack.
-                    </p>
                   </div>
 
                   {/* Top Badges & Global Actions */}
@@ -2639,7 +2579,7 @@ export default function ProfilePage() {
                       <IconBriefcase className="w-3.5 h-3.5" />
                       <span>Work Experience</span>
                       <span className="text-[11px] px-1.5 py-0.2 rounded-full bg-white/70">
-                        {expFacts.length}
+                        {expGroups.length}
                       </span>
                     </button>
                     <button
@@ -2748,12 +2688,12 @@ export default function ProfilePage() {
                         </button>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 auto-rows-fr gap-4 sm:gap-5">
                         {filteredProjectCardItems.map((project) => (
                           <div
                             key={project.id}
                             onClick={() => setActiveModalProject(project)}
-                            className="aspect-square p-5 rounded-2xl bg-white border border-[#ECE7DD] shadow-2xs hover:shadow-lg hover:border-[#1E6B38] transition-all flex flex-col justify-between cursor-pointer group relative overflow-hidden"
+                            className="h-full min-h-[250px] p-5 rounded-2xl bg-white border border-[#ECE7DD] shadow-2xs hover:shadow-lg hover:border-[#1E6B38] transition-all flex flex-col gap-3 cursor-pointer group relative overflow-hidden"
                           >
                             {/* Top row: Icon & Status */}
                             <div className="flex items-center justify-between gap-2">
@@ -2781,7 +2721,7 @@ export default function ProfilePage() {
                             </div>
 
                             {/* Middle: Project Name, Source, Tech Badges */}
-                            <div className="my-auto py-2 space-y-1.5">
+                            <div className="flex-1 min-w-0 space-y-1.5">
                               <h3 className="text-base sm:text-lg font-bold text-[#141A16] group-hover:text-[#1E6B38] transition-colors line-clamp-1">
                                 {project.name}
                               </h3>
@@ -2792,17 +2732,17 @@ export default function ProfilePage() {
                               {/* Quick Tech Stack preview */}
                               {project.techStack.length > 0 && (
                                 <div className="flex flex-wrap gap-1 pt-1">
-                                  {project.techStack.slice(0, 3).map((t) => (
+                                  {project.techStack.slice(0, 2).map((t) => (
                                     <span
                                       key={t.id}
-                                      className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-[#FAF9F5] border border-[#ECE7DD] text-[#556056]"
+                                      className="max-w-full truncate px-2 py-0.5 rounded-md text-[10px] font-semibold bg-[#FAF9F5] border border-[#ECE7DD] text-[#556056]"
                                     >
                                       {t.text}
                                     </span>
                                   ))}
-                                  {project.techStack.length > 3 && (
+                                  {project.techStack.length > 2 && (
                                     <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-[#FAF9F5] text-[#78827A]">
-                                      +{project.techStack.length - 3}
+                                      +{project.techStack.length - 2}
                                     </span>
                                   )}
                                 </div>
@@ -2810,14 +2750,14 @@ export default function ProfilePage() {
                             </div>
 
                             {/* Bottom row: Claims count & quick buttons */}
-                            <div className="pt-3 border-t border-[#ECE7DD] flex items-center justify-between gap-2">
+                            <div className="pt-3 border-t border-[#ECE7DD] flex flex-col gap-2 mt-auto">
                               <span className="text-[11px] font-semibold text-[#78827A]">
                                 {project.verifiedCount} / {project.totalCount} claims
                               </span>
 
                               <div
                                 onClick={(e) => e.stopPropagation()}
-                                className="flex items-center gap-1.5"
+                                className="flex items-center gap-1.5 w-full"
                               >
                                 <button
                                   type="button"
@@ -2848,7 +2788,7 @@ export default function ProfilePage() {
                                 <button
                                   type="button"
                                   onClick={() => setActiveModalProject(project)}
-                                  className="px-2.5 py-1 rounded-lg bg-[#EAF4EB] text-[#1E6B38] border border-[#C5E1CB] hover:bg-[#D5EBD7] text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                                  className="flex-1 justify-center px-2.5 py-1 rounded-lg bg-[#EAF4EB] text-[#1E6B38] border border-[#C5E1CB] hover:bg-[#D5EBD7] text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
                                   title="Inspect 4 resume sections"
                                 >
                                   <span>Inspect</span>
@@ -3626,11 +3566,8 @@ export default function ProfilePage() {
                         </div>
                         <div>
                           <h3 className="text-base font-bold text-[#141A16]">
-                            Work Experience &amp; Professional Roles
+                            Work Experience
                           </h3>
-                          <p className="text-xs text-[#78827A]">
-                            Extracted from candidate resume and employment history
-                          </p>
                         </div>
                       </div>
                     </div>
@@ -3641,7 +3578,15 @@ export default function ProfilePage() {
                           No independent employment claims found outside of project repositories.
                         </p>
                       ) : (
-                        expFacts.map((f) => (
+                        expGroups.map(([role, roleFacts]) => (
+                        <div key={role} className="space-y-2">
+                          <div className="flex items-center justify-between pt-2">
+                            <h4 className="text-sm font-serif font-bold text-[#141A16]">{role}</h4>
+                            <span className="text-[11px] text-[#78827A]">
+                              {roleFacts.length} {roleFacts.length === 1 ? "claim" : "claims"}
+                            </span>
+                          </div>
+                          {roleFacts.map((f) => (
                           <div
                             key={f.id}
                             className="group p-3.5 rounded-xl border border-[#ECE7DD] hover:border-[#CBD5E1] bg-white flex items-start justify-between gap-3 text-xs transition-all"
@@ -3687,6 +3632,8 @@ export default function ProfilePage() {
                               </button>
                             </div>
                           </div>
+                          ))}
+                        </div>
                         ))
                       )}
                     </div>
@@ -3770,16 +3717,10 @@ export default function ProfilePage() {
                 <span className="text-xs font-bold uppercase tracking-wider text-[#1E6B38] bg-[#EAF4EB] px-2.5 py-0.5 rounded-full border border-[#C5E1CB]">
                   Persistent Candidate Profile Hub
                 </span>
-                <span className="text-xs text-[#78827A]">
-                  Core Ground Truth &amp; Verified Evidence
-                </span>
               </div>
               <h1 className="text-3xl sm:text-4xl font-serif font-normal text-[#141A16] tracking-tight">
                 Candidate Profile &amp; Fact Hub
               </h1>
-              <p className="text-sm text-[#556056] max-w-2xl leading-relaxed">
-                Your verified career foundation. Add education, projects, and repositories once. Skillora reuses this verified evidence across all your job applications.
-              </p>
             </div>
 
             <div className="flex items-center gap-2">
