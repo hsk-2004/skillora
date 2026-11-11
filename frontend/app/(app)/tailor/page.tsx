@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
+import ResumePreview from "@/components/ResumePreview";
 
 const nums = (s: string) => s.match(/\d+(\.\d+)?/g) ?? [];
 
@@ -145,6 +146,12 @@ const ACTUAL_USER_PROMPTS = [
   },
 ];
 
+/** Tell the live resume what is being typed right now (id "__summary" for the summary). */
+const sendDraft = (id: string, text: string) =>
+  window.dispatchEvent(new CustomEvent("resume-draft", { detail: { id, text } }));
+const clearDraft = (id: string) =>
+  window.dispatchEvent(new CustomEvent("resume-draft-clear", { detail: { id } }));
+
 export default function TailorPage() {
   const chatBoxRef = useRef<HTMLDivElement>(null);
   const st = useStore();
@@ -152,6 +159,7 @@ export default function TailorPage() {
   const [chatInput, setChatInput] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
   const [showExamplesDrawer, setShowExamplesDrawer] = useState(false);
+  const [showResume, setShowResume] = useState(true);
   const [activeCitation, setActiveCitation] = useState<{ bulletId: string; factText: string; span: string } | null>(null);
 
   // Track accepted and rejected suggestions
@@ -314,10 +322,13 @@ export default function TailorPage() {
                           key={b.id + "-" + b.text}
                           contentEditable
                           suppressContentEditableWarning
+                          onInput={(e) => sendDraft(b.id, e.currentTarget.textContent ?? "")}
                           onBlur={(e) => {
                             const newText = e.currentTarget.textContent?.trim();
                             if (newText && newText !== b.text) {
-                              st.editBullet(b.id, newText);
+                              Promise.resolve(st.editBullet(b.id, newText)).finally(() => clearDraft(b.id));
+                            } else {
+                              clearDraft(b.id);
                             }
                           }}
                           className="text-[#141A16] leading-relaxed focus:outline-none focus:bg-white p-1 rounded"
@@ -382,54 +393,23 @@ export default function TailorPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      
-      {/* Active Agent Banner: Mention where which agent is running */}
-      <div className="p-3.5 rounded-2xl bg-[#FAF9F5] border border-[#DDD7CA] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2.5">
-          <span className="p-1.5 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200">
-            <IconBot className="w-4 h-4 text-indigo-700" />
-          </span>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-[#141A16]">Active Agents on This Stage: Google ADK Coordinator &amp; Resume Writer</span>
-              <span className="text-[10px] font-bold text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
-                google-adk 2.13
-              </span>
-            </div>
-            <p className="text-[#556056] text-[11px] mt-0.5">
-              ADK Coordinator handles conversational tool calls; ADK Resume Writer synthesizes bullets; Verifier callbacks prevent hallucinations.
-            </p>
-          </div>
-        </div>
-
-        <Link
-          href="/faculty"
-          className="px-3.5 py-1.5 bg-white hover:bg-[#FAF9F5] text-[#1E6B38] border border-[#C5E1CB] font-bold text-xs rounded-full shadow-2xs transition-all shrink-0 self-start sm:self-auto flex items-center gap-1 cursor-pointer"
-        >
-          <span>System Architecture</span>
-          <span>→</span>
-        </Link>
-      </div>
+    <div className="space-y-6 w-full">
 
       {/* Header section */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#1E6B38] bg-[#EAF4EB] px-2.5 py-0.5 rounded-full border border-[#C5E1CB]">
-              Verified Resume Improvement
-            </span>
-            <span className="text-xs text-[#78827A]">Google ADK Resume Engine</span>
-          </div>
           <h1 className="text-3xl sm:text-4xl font-serif font-normal text-[#141A16] tracking-tight">
-            Improve Resume · Grounded Canvas
+            Improve Resume
           </h1>
-          <p className="text-sm text-[#556056] max-w-2xl leading-relaxed">
-            Review the top 5 JD-tailored suggestions below, accept or reject changes directly onto the canvas, or demonstrate live Google ADK agent execution.
-          </p>
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowResume(!showResume)}
+            className="px-4 py-2 bg-white hover:bg-[#FAF9F5] text-[#141A16] border border-[#DDD7CA] rounded-full font-bold text-xs shadow-sm transition-all cursor-pointer"
+          >
+            {showResume ? "Hide resume" : "Show resume"}
+          </button>
           <button
             onClick={handleRunVerifier}
             disabled={isVerifying}
@@ -454,10 +434,10 @@ export default function TailorPage() {
       </div>
 
       {/* Main Split Layout: Resume Canvas & Suggestions (Left) vs ADK Chat Drawer (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className={`grid grid-cols-1 ${showResume ? "lg:grid-cols-3" : "lg:grid-cols-2"} gap-6 items-start`}>
         
         {/* Left Column: Top 5 Suggestions + Grounded Resume Sheet */}
-        <div className="lg:col-span-7 space-y-6">
+        <div className="min-w-0 space-y-6">
 
           {/* Top 5 Best Suggestions with Accept / Reject Controls */}
           <div className="bg-white p-6 rounded-2xl border border-[#C5E1CB] shadow-[0_2px_14px_rgba(0,0,0,0.02)] space-y-4">
@@ -468,11 +448,8 @@ export default function TailorPage() {
                 </span>
                 <div>
                   <h3 className="text-base font-serif font-bold text-[#141A16]">
-                    Top 5 Best Resume Suggestions (Target JD Alignment)
+                    Top 5 Suggestions
                   </h3>
-                  <p className="text-[11px] text-[#556056]">
-                    Ranked by ATS impact. Accept to add directly to your resume canvas, or reject to dismiss.
-                  </p>
                 </div>
               </div>
               <span className="text-[10px] font-bold text-[#1E6B38] bg-[#EAF4EB] px-2.5 py-1 rounded-full border border-[#C5E1CB]">
@@ -644,9 +621,11 @@ export default function TailorPage() {
                 key={summary}
                 contentEditable
                 suppressContentEditableWarning
+                onInput={(e) => sendDraft("__summary", e.currentTarget.textContent ?? "")}
                 onBlur={(e) => {
                   const text = e.currentTarget.textContent?.trim();
-                  if (text && text !== summary) st.editSummary(text);
+                  if (text && text !== summary) Promise.resolve(st.editSummary(text)).finally(() => clearDraft("__summary"));
+                  else clearDraft("__summary");
                 }}
                 className="p-3 rounded-xl bg-[#FAF9F5] border border-[#ECE7DD] text-xs sm:text-sm text-[#141A16] leading-relaxed focus:outline-none focus:bg-white transition-all"
               >
@@ -724,8 +703,8 @@ export default function TailorPage() {
 
         </div>
 
-        {/* Right Column: Google ADK Assistant Chat Drawer & Actual User Prompts */}
-        <div className="lg:col-span-5 bg-white p-6 rounded-2xl border border-[#ECE7DD] shadow-[0_2px_14px_rgba(0,0,0,0.02)] space-y-4">
+        {/* Right Column: ADK Assistant Chat Drawer & Actual User Prompts */}
+        <div className={`min-w-0 bg-white p-6 rounded-2xl border border-[#ECE7DD] shadow-[0_2px_14px_rgba(0,0,0,0.02)] space-y-4`}>
           
           {/* Assistant Header */}
           <div className="flex items-center justify-between border-b border-[#ECE7DD] pb-3">
@@ -734,13 +713,12 @@ export default function TailorPage() {
                 <IconBot className="w-4 h-4 text-[#1E6B38]" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-[#141A16]">Google ADK Assistant</h3>
-                <p className="text-[10px] text-[#78827A]">Multi-Tool Grounding Coordinator</p>
+                <h3 className="text-sm font-bold text-[#141A16]">ADK Assistant</h3>
               </div>
             </div>
 
             <span className="text-[10px] font-semibold text-[#1E6B38] bg-[#EAF4EB] border border-[#C5E1CB] px-2 py-0.5 rounded-full">
-              Connected · 6 Active Tools
+              Google ADK
             </span>
           </div>
 
@@ -748,7 +726,7 @@ export default function TailorPage() {
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <p className="text-[10px] text-[#78827A] font-semibold uppercase tracking-wider">
-                Actual User Prompts to Demonstrate:
+                Try asking:
               </p>
               {st.chat.length > 0 && (
                 <button
@@ -899,6 +877,20 @@ export default function TailorPage() {
             </button>
           </div>
         </div>
+
+        {showResume && (
+          <div className="min-w-0 lg:sticky lg:top-20 space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <h3 className="text-sm font-serif font-bold text-[#141A16]">Live Resume</h3>
+              <span className="text-[10px] font-semibold text-emerald-700 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> updates as you edit
+              </span>
+            </div>
+            <div className="lg:max-h-[calc(100vh-7rem)] overflow-y-auto rounded-md">
+              <ResumePreview />
+            </div>
+          </div>
+        )}
 
       </div>
 

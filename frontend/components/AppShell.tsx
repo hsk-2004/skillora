@@ -11,6 +11,7 @@ import AgentArchitectureModal from "./AgentArchitectureModal";
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const path = usePathname();
+  const wide = path === "/tailor"; // the Tailor workspace uses the full browser width
   const { busy, error, notice, mode, profile, logout } = useStore();
   const [showAgentModal, setShowAgentModal] = useState(false);
 
@@ -20,7 +21,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
       {/* Main App Navigation Bar */}
       <header className="sticky top-0 z-40 bg-[#FAF9F5]/90 backdrop-blur-md border-b border-[#ECE7DD] shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className={`${wide ? "max-w-none" : "max-w-7xl"} mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between`}>
           
           {/* Logo & Brand */}
           <Link href="/job" className="flex items-center gap-2.5 group">
@@ -109,7 +110,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
       {/* System Status / Agent Action Banners */}
       {(busy || error || notice) && (
-        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+        <div className={`w-full ${wide ? "max-w-none" : "max-w-7xl"} mx-auto px-4 sm:px-6 lg:px-8 pt-4`}>
           <div className={`p-3.5 rounded-xl border text-xs sm:text-sm font-medium flex items-center gap-2.5 shadow-sm transition-all ${
             error
               ? "bg-rose-50 border-rose-200 text-rose-800"
@@ -126,7 +127,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       )}
 
       {/* Main Workspace Body */}
-      <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 relative">
+      <div className={`flex-1 w-full ${wide ? "max-w-none" : "max-w-7xl"} mx-auto px-4 sm:px-6 lg:px-8 py-6 relative`}>
         <main className="w-full">
           {children}
           {mode === "rules" && (
@@ -139,7 +140,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
       {/* Persistent Footer */}
       <footer className="mt-auto border-t border-[#ECE7DD] bg-[#FAF9F5] py-4 text-xs text-[#78827A]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
+        <div className={`${wide ? "max-w-none" : "max-w-7xl"} mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2`}>
           <div className="flex items-center gap-2">
             <span className="font-serif font-bold text-slate-800">Skillora</span>
             <span>· Deterministic Grounding & Multi-Agent Architecture</span>

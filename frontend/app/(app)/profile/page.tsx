@@ -1547,10 +1547,11 @@ export default function ProfilePage() {
                         <button
                           type="button"
                           onClick={handleRemoveResume}
-                          title="Remove uploaded resume"
-                          className="text-[#78827A] hover:text-rose-600 p-1 cursor-pointer"
+                          title="Deletes this resume, the facts extracted from it, and its cached analysis"
+                          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-bold cursor-pointer transition-colors"
                         >
-                          <IconClose className="w-3.5 h-3.5" />
+                          <IconClose className="w-3 h-3" />
+                          <span>Remove</span>
                         </button>
                       </div>
                     )}

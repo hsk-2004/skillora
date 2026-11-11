@@ -114,8 +114,12 @@ def _write(analysis, targets, pool, uid, local_writer):
             job = {"title": analysis["title"], "keywords": analysis["keywords"][:12], "must_haves": [r["text"] for r in analysis["requirements"] if r["level"] == "must"][:8]}
             payload = {"job": job, "items": [{"id": f["id"], "project": f["project"], "details": f.get("details") or [f["text"]], "stack": f.get("stack", "")} for f in targets],
                        "_ctx": {"uid": uid, "facts": {f["id"]: f for f in pool}, "pool_ids": [f["id"] for f in pool], "bundles": {t["id"]: t.get("ids", [t["id"]]) for t in targets}}}
-            with activity.step(uid, "A2A hop", "CrewAI Planner → A2A protocol → ADK Writer"):
+            with activity.step(uid, "A2A hop", "CrewAI Planner → A2A protocol → ADK Writer") as st:
                 reply = planner_delegate(payload, "ctx-" + _u.uuid4().hex[:8], uid)
+                n = len(reply.get("bullets", []))
+                rep = (reply.get("verifier_report") or {}).get("bullets", {})
+                bad = sum(1 for r in rep.values() if not r.get("ok", True))
+                st["note"] = f"ADK Writer drafted {n} bullets; ADK Verifier checked {len(rep)} and rejected {bad}"
             return {"summary": reply.get("summary"), "bullets": reply.get("bullets", [])}, {t["id"]: 1 for t in targets}
         except Exception as e:  # noqa: BLE001
             log.warning("A2A path failed (%s); using in-process ADK writer", e)

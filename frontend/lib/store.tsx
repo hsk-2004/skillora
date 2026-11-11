@@ -210,12 +210,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       reupload: async (id, f) => { const r = await run("Re-reading the updated file", () => api.upload(f, id)); if (!r) return ""; await refreshLedger(); if (job) setJob(await api.latestJob()); const m = ingestMsg(r); flash(m); return m; },
       removeSource: async (id) => {
         if (!live) return;
-        await run("Deleting source and its facts", async () => {
+        await run("Removing the source, its facts and its cache", async () => {
           await api.removeSource(id);
           await refreshLedger();
           if (job) setJob(await api.latestJob());
         });
-        flash("Source deleted along with the facts extracted from it.");
+        flash("Removed. Its facts and cached analysis were cleared, so uploading it again re-analyses it from scratch.");
       },
       found,
       clearFound: () => setFound({ profiles: [], repos: [] }),

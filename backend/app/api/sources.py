@@ -74,7 +74,8 @@ async def upload(
     src, info = service.ingest_text(db, user.id, name=name, stype=stype, text=text, detail=detail)
     info["github"] = extract_github_links(text, urls)
     extracted = {}
-    if stype in ("pdf", "docx", "pptx", "note"):
+    is_sample = (file.filename or "").lower().startswith(("sample_", "adversarial_"))  # built-in demo files belong to someone else
+    if stype in ("pdf", "docx", "pptx", "note") and not is_sample:  # profile auto-fill only from the user's own resume
         extracted = extract_resume_entities(text, urls)
         if extracted.get("name"):
             user.name = extracted["name"]
@@ -132,7 +133,21 @@ def resync(sid: int, db: Session = Depends(get_db), user: User = Depends(current
 @router.delete("/sources/{sid}")
 def delete_source(sid: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     s = db.get(Source, sid)
+    cleared = 0
     if s and s.user_id == user.id:
+        cleared = _clear_extraction_cache(db, s)
         db.delete(s)
         db.commit()
-    return {"ok": True}
+    return {"ok": True, "cache_cleared": cleared}
+
+
+def _clear_extraction_cache(db: Session, s: Source) -> int:
+    """Forget the cached extraction for this exact file, so uploading it again is re-analysed from scratch instead of
+    returning the old result instantly ("this exact file was read before")."""
+    from app.config import MAX_FACTS_GITHUB, MAX_FACTS_PER_SOURCE
+    from app.db import LLMCache
+    from app.parsers import sha
+
+    keys = {sha(f"extract2|{lim}|{s.name}|{s.text}") for lim in (MAX_FACTS_PER_SOURCE, MAX_FACTS_GITHUB)}
+    n = db.query(LLMCache).filter(LLMCache.key.in_(keys)).delete(synchronize_session=False)
+    return n

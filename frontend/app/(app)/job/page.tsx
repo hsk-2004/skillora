@@ -684,124 +684,29 @@ export default function JobPage() {
               )}
 
               {/* Dedicated Security & Demonstration Toolbar */}
-              <div className="pt-2 border-t border-[#ECE7DD] space-y-2">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="font-bold text-[#78827A] uppercase tracking-wider flex items-center gap-1.5">
-                    <IconShield className="w-3.5 h-3.5 text-[#1E6B38]" />
-                    <span>Try a test file</span>
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                  {/* Test 1: Subject Lecture PPT */}
-                  <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-300 flex flex-col justify-between space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-amber-950 text-[11px] flex items-center gap-1">
-                        <IconAlertTriangle className="w-3 h-3 text-amber-600" />
-                        <span>Subject Lecture PPT</span>
-                      </span>
-                      <a
-                        href="/sample_subject_lecture.pptx"
-                        download="sample_subject_lecture.pptx"
-                        className="text-[10px] text-amber-800 hover:text-amber-950 font-semibold underline flex items-center gap-0.5"
-                        title="Download sample subject presentation (.pptx)"
+              <div className="pt-3 border-t border-[#ECE7DD] space-y-2">
+                <p className="text-[11px] font-bold text-[#78827A] uppercase tracking-wider">Try a test file</p>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { file: "sample_subject_lecture.pptx" as const, label: "Lecture slides", color: "bg-amber-700 hover:bg-amber-800", dl: "text-amber-800" },
+                    { file: "adversarial_prompt_injection_resume.pdf" as const, label: "Injection PDF", color: "bg-rose-600 hover:bg-rose-700", dl: "text-rose-700" },
+                    { file: "sample_aiml_resume.pdf" as const, label: "Clean resume", color: "bg-[#1E6B38] hover:bg-[#16532B]", dl: "text-[#1E6B38]" },
+                  ].map((t) => (
+                    <div key={t.file} className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleTestResumeFile(t.file)}
+                        disabled={testingFileBusy !== null}
+                        className={`px-3.5 py-1.5 rounded-full text-white text-[11px] font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${t.color}`}
                       >
-                        <IconDownload className="w-3 h-3" />
-                        <span>PPTX</span>
+                        {testingFileBusy === t.file && <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                        <span>{t.label}</span>
+                      </button>
+                      <a href={`/${t.file}`} download={t.file} title="Download this sample" className={`${t.dl} hover:underline`}>
+                        <IconDownload className="w-3.5 h-3.5" />
                       </a>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleTestResumeFile("sample_subject_lecture.pptx")}
-                      disabled={testingFileBusy !== null}
-                      className="w-full py-1.5 px-2 rounded-lg bg-amber-700 hover:bg-amber-800 text-white font-bold text-[10px] shadow-2xs transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
-                    >
-                      {testingFileBusy === "sample_subject_lecture.pptx" ? (
-                        <>
-                          <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          <span>Testing Guardrail...</span>
-                        </>
-                      ) : (
-                        <>
-                          <IconShield className="w-3 h-3" />
-                          <span>Test Subject PPT</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Test 2: Adversarial Prompt Injection PDF */}
-                  <div className="p-2.5 rounded-xl bg-rose-50/70 border border-rose-200 flex flex-col justify-between space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-rose-900 text-[11px] flex items-center gap-1">
-                        <IconShield className="w-3 h-3 text-rose-600" />
-                        <span>Prompt Injection PDF</span>
-                      </span>
-                      <a
-                        href="/adversarial_prompt_injection_resume.pdf"
-                        download="adversarial_prompt_injection_resume.pdf"
-                        className="text-[10px] text-rose-700 hover:text-rose-900 font-semibold underline flex items-center gap-0.5"
-                        title="Download the adversarial PDF file"
-                      >
-                        <IconDownload className="w-3 h-3" />
-                        <span>PDF</span>
-                      </a>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleTestResumeFile("adversarial_prompt_injection_resume.pdf")}
-                      disabled={testingFileBusy !== null}
-                      className="w-full py-1.5 px-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] shadow-2xs transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
-                    >
-                      {testingFileBusy === "adversarial_prompt_injection_resume.pdf" ? (
-                        <>
-                          <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          <span>Testing Guardrail...</span>
-                        </>
-                      ) : (
-                        <>
-                          <IconShield className="w-3 h-3" />
-                          <span>Test Injection PDF</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Test 3: Clean AI/ML Resume Button */}
-                  <div className="p-2.5 rounded-xl bg-[#EAF4EB]/70 border border-[#C5E1CB] flex flex-col justify-between space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-[#1E6B38] text-[11px] flex items-center gap-1">
-                        <IconDocument className="w-3 h-3 text-[#1E6B38]" />
-                        <span>Clean AI/ML Resume</span>
-                      </span>
-                      <a
-                        href="/sample_aiml_resume.pdf"
-                        download="sample_aiml_resume.pdf"
-                        className="text-[10px] text-[#1E6B38] hover:text-[#16532B] font-semibold underline flex items-center gap-0.5"
-                        title="Download the sample AI/ML PDF file"
-                      >
-                        <IconDownload className="w-3 h-3" />
-                        <span>PDF</span>
-                      </a>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleTestResumeFile("sample_aiml_resume.pdf")}
-                      disabled={testingFileBusy !== null}
-                      className="w-full py-1.5 px-2 rounded-lg bg-[#1E6B38] hover:bg-[#16532B] text-white font-bold text-[10px] shadow-2xs transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
-                    >
-                      {testingFileBusy === "sample_aiml_resume.pdf" ? (
-                        <>
-                          <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          <span>Ingesting PDF...</span>
-                        </>
-                      ) : (
-                        <>
-                          <IconCheck className="w-3 h-3" />
-                          <span>Load Clean Resume</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -1031,7 +936,12 @@ export default function JobPage() {
                         className="p-2.5 rounded-xl bg-[#FAF9F5] border border-[#ECE7DD] space-y-1 text-xs"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-semibold text-[#141A16]">{c.key}</span>
+                          <span className="font-semibold text-[#141A16] flex items-center gap-1.5">
+                            {c.key}
+                            {c.key === "Evidence quality" && (
+                              <span className="px-1.5 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-800 text-[9px] font-bold">ADK</span>
+                            )}
+                          </span>
                           <span className="font-mono font-bold text-[#1E6B38]">
                             {c.scored === false ? "N/A" : `${Math.round(c.value)}/100`}
                           </span>
@@ -1047,6 +957,10 @@ export default function JobPage() {
                       </div>
                     ))}
                   </div>
+                  <p className="text-[11px] text-[#78827A]">
+                    <span className="px-1.5 py-0.5 mr-1 rounded-full bg-blue-50 border border-blue-200 text-blue-800 text-[9px] font-bold">ADK</span>
+                    Evidence quality grades the bullets written by the Google ADK Resume Writer and checked by the ADK Verifier. The other scores come from CrewAI matching and plain Python.
+                  </p>
                 </div>
               )}
 

@@ -52,7 +52,7 @@ const FW_COLOR: Record<string, string> = {
 };
 
 export default function AgentArchitectureModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  const [tab, setTab] = useState<"flow" | "agents">("flow");
+  const [tab, setTab] = useState<"flow" | "agents" | "diagram">("flow");
   const [models, setModels] = useState<string[]>([]);
 
   useEffect(() => {
@@ -63,7 +63,7 @@ export default function AgentArchitectureModal({ isOpen, onClose }: { isOpen: bo
   if (!isOpen) return null;
   const main = models[0] ?? "Gemini";
 
-  const tabBtn = (k: "flow" | "agents", label: string) => (
+  const tabBtn = (k: "flow" | "agents" | "diagram", label: string) => (
     <button
       onClick={() => setTab(k)}
       className={`px-4 py-2 rounded-full text-xs font-bold border cursor-pointer ${tab === k ? "bg-[#1E6B38] text-white border-[#1E6B38]" : "bg-white text-[#556056] border-[#DDD7CA]"}`}
@@ -86,10 +86,23 @@ export default function AgentArchitectureModal({ isOpen, onClose }: { isOpen: bo
         <div className="px-6 py-3 flex gap-2 border-b border-[#ECE7DD] bg-white">
           {tabBtn("flow", "Flow")}
           {tabBtn("agents", "Agents")}
+          {tabBtn("diagram", "Diagram")}
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
-          {tab === "flow" ? (
+          {tab === "diagram" ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <p className="text-xs text-[#556056]">One run, step by step. Each step sits in the lane of what performs it.</p>
+                <a href="/agent-flow.png" target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-[#1E6B38] hover:underline">Open full size ↗</a>
+              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/agent-flow.png" alt="SkillOra agent flow diagram" className="w-full rounded-xl border border-[#E8E3D7] bg-white" />
+              <p className="text-[11px] text-[#78827A]">
+                Note: in step 9 the CrewAI side now hands the writing to the Google ADK Resume Writer over the A2A protocol. Guardrails and Langfuse tracing run alongside every step.
+              </p>
+            </div>
+          ) : tab === "flow" ? (
             <div className="space-y-3">
               {STEPS.map((s, i) => (
                 <div key={s.title}>
