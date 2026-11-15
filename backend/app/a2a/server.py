@@ -73,7 +73,24 @@ class _KeyGate:
                 audit.record(None, "guardrail", "A2A gate", "BLOCKED A2A call without a valid X-A2A-Key", status="blocked")
                 await JSONResponse({"error": "unauthorized"}, status_code=401)(scope, receive, send)
                 return
-        await self.app(scope, receive, send)
+        token = None
+        if scope["type"] == "http":
+            try:  # continue the caller's trace (traceparent header) so planner -> A2A -> writer is ONE Langfuse trace
+                from opentelemetry import context as otel_ctx
+                from opentelemetry.propagate import extract
+
+                hdrs_in = {k.decode().lower(): v.decode() for k, v in scope["headers"]}
+                token = otel_ctx.attach(extract(hdrs_in))
+                audit.record(None, "a2a", "A2A server", "traceparent " + ("received - joining caller trace" if "traceparent" in hdrs_in else "MISSING - new trace"))
+            except Exception:  # noqa: BLE001
+                token = None
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            if token is not None:
+                from opentelemetry import context as otel_ctx
+
+                otel_ctx.detach(token)
 
 
 def build_app(agent=None):

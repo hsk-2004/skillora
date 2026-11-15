@@ -13,15 +13,18 @@ from .. import config
 from ..core import audit
 
 
-def _headers() -> dict:
-    return {"X-A2A-Key": config.A2A_SHARED_KEY} if config.A2A_SHARED_KEY else {}
+def _headers(carrier: dict | None = None) -> dict:
+    h = {"X-A2A-Key": config.A2A_SHARED_KEY} if config.A2A_SHARED_KEY else {}
+    if carrier:  # W3C traceparent captured in planner_delegate: the writer's spans join the planner's Langfuse trace
+        h.update(carrier)
+    return h
 
 
-async def _call(base: str, payload: dict, context_id: str) -> dict:
+async def _call(base: str, payload: dict, context_id: str, carrier: dict | None = None) -> dict:
     from a2a.client import ClientConfig, create_client
     from a2a.types import Message, Part, Role, SendMessageRequest
 
-    async with httpx.AsyncClient(headers=_headers(), timeout=config.LLM_TIMEOUT * 3) as http:
+    async with httpx.AsyncClient(headers=_headers(carrier), timeout=config.LLM_TIMEOUT * 3) as http:
         client = await create_client(base, client_config=ClientConfig(httpx_client=http, streaming=False))
         msg = Message(message_id=uuid.uuid4().hex, role=Role.ROLE_USER, context_id=context_id,
                       parts=[Part(text=json.dumps(payload))])
@@ -58,14 +61,14 @@ def _extract_text(ev) -> str:
     return ""
 
 
-def send_to_writer(payload: dict, context_id: str, uid: int | None = None) -> dict:
+def send_to_writer(payload: dict, context_id: str, uid: int | None = None, carrier: dict | None = None) -> dict:
     """Blocking A2A call -> parsed JSON reply from the ADK writer ({'summary','bullets','verifier_report'})."""
     import time
 
     base = config.PUBLIC_URL + "/a2a/writer"
     t0 = time.time()
     try:
-        res = asyncio.run(_call(base, payload, context_id))
+        res = asyncio.run(_call(base, payload, context_id, carrier))
     except Exception as e:  # noqa: BLE001
         audit.record(uid, "error", "A2A client (CrewAI)", f"A2A call failed: {e}"[:250], status="error")
         raise
@@ -87,11 +90,19 @@ def planner_delegate(payload: dict, context_id: str, uid: int | None = None) -> 
     from ..llm import crew_llm, with_models
 
     box: dict = {}
+    carrier: dict = {}
+    try:  # tag the CrewAI planner with the SAME session id the ADK writer gets from the A2A context_id -> Langfuse "Sessions" groups both runs
+        from langfuse import propagate_attributes
+
+        span_cm = propagate_attributes(session_id=context_id, user_id=str(uid) if uid else None)
+        span_cm.__enter__()
+    except Exception:  # noqa: BLE001 - tracing must never break the call
+        span_cm = None
 
     @tool("delegate_to_adk_writer")
     def delegate_to_adk_writer(note: str = "") -> str:
         """Send the prepared writing job to the remote Google ADK Resume Writer over the A2A protocol and return its reply."""
-        box["reply"] = send_to_writer(payload, context_id, uid)
+        box["reply"] = send_to_writer(payload, context_id, uid, carrier)
         return json.dumps({"bullets": len(box["reply"].get("bullets", []))})
 
     def go(model: str):
@@ -101,7 +112,11 @@ def planner_delegate(payload: dict, context_id: str, uid: int | None = None) -> 
         task = Task(description="Call the delegate_to_adk_writer tool exactly once, then reply 'delegated'.", expected_output="delegated", agent=agent)
         Crew(agents=[agent], tasks=[task], process=Process.sequential, verbose=False).kickoff()
 
-    with_models(go)
-    if "reply" not in box:  # the planner LLM skipped the tool: do the A2A call directly so the pipeline never stalls
-        box["reply"] = send_to_writer(payload, context_id, uid)
-    return box["reply"]
+    try:
+        with_models(go)
+        if "reply" not in box:  # the planner LLM skipped the tool: do the A2A call directly so the pipeline never stalls
+            box["reply"] = send_to_writer(payload, context_id, uid, carrier)
+        return box["reply"]
+    finally:
+        if span_cm is not None:
+            span_cm.__exit__(None, None, None)

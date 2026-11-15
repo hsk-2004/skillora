@@ -63,6 +63,36 @@ export default function AppShell({ children }: { children: ReactNode }) {
             </Link>
 
             <Link
+              href="/observability"
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all hidden md:flex items-center gap-1.5 ${
+                path === "/observability"
+                  ? "text-[#1E6B38] bg-[#EAF4EB] border-[#C5E1CB]"
+                  : "text-[#556056] hover:text-[#1E6B38] hover:bg-white border-transparent hover:border-[#E5E1D5]"
+              }`}
+              title="What Langfuse tracing is and how to read it"
+            >
+              <svg className="w-3.5 h-3.5 text-[#1E6B38]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 12h4l3-8 4 16 3-8h4" />
+              </svg>
+              <span>Tracing</span>
+            </Link>
+
+            <Link
+              href="/score-formula"
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all hidden md:flex items-center gap-1.5 ${
+                path === "/score-formula"
+                  ? "text-[#1E6B38] bg-[#EAF4EB] border-[#C5E1CB]"
+                  : "text-[#556056] hover:text-[#1E6B38] hover:bg-white border-transparent hover:border-[#E5E1D5]"
+              }`}
+              title="How the job-fit score is calculated"
+            >
+              <svg className="w-3.5 h-3.5 text-[#1E6B38]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              <span>Score Formula</span>
+            </Link>
+
+            <Link
               href="/faculty"
               className="text-xs font-semibold text-[#556056] hover:text-[#1E6B38] px-3 py-1.5 rounded-full hover:bg-white border border-transparent hover:border-[#E5E1D5] transition-all hidden md:flex items-center gap-1.5"
               title="System Architecture & Verification"
