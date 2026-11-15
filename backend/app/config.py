@@ -24,6 +24,11 @@ PUBLIC_URL = os.getenv("PUBLIC_URL", "http://127.0.0.1:8000").rstrip("/")  # whe
 A2A_ENABLED = os.getenv("A2A_ENABLED", "1") == "1"
 A2A_SHARED_KEY = os.getenv("A2A_SHARED_KEY", "")  # if set, every A2A call (not the public agent card) must send X-A2A-Key
 
+# --- MCP (requirement 2): tool server mounted at /mcp/; our own agents call it over the MCP protocol on this machine.
+MCP_ENABLED = os.getenv("MCP_ENABLED", "1") == "1"
+MCP_URL = os.getenv("MCP_URL", f"http://127.0.0.1:{os.getenv('PORT', '8000')}/mcp/")  # internal address of the MCP server
+MCP_SHARED_KEY = os.getenv("MCP_SHARED_KEY", "")  # if set, every MCP call must send X-MCP-Key; if empty, only loopback callers are accepted
+
 # --- Observability (requirement 9): Langfuse Cloud. Tracing turns on only when both keys are present.
 LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY", "")
 LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY", "")

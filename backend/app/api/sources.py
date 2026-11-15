@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app import activity, service
 from app.api.deps import current_user
 from app.db import Source, User, get_db
+from app.mcp_client import parse_document_async, read_github
 from app.parsers import (
     check_input,
     extract_github_links,
@@ -43,8 +44,8 @@ def list_sources(db: Session = Depends(get_db), user: User = Depends(current_use
 
 @router.post("/sources/github")
 def add_github(b: GithubIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    with activity.step(user.id, "GitHub reader", "GitHub REST API · README + manifests") as s:
-        name, text, detail = fetch_github(b.repo)
+    with activity.step(user.id, "GitHub reader", "MCP tool github_crawler_mcp · GitHub REST API") as s:
+        name, text, detail = read_github(b.repo, user.id)
         s["note"] = name
     src, info = service.ingest_text(db, user.id, name=name, stype="github", text=text, uri=b.repo, detail=detail)
     return _ingested(db, src, info)
@@ -58,8 +59,8 @@ async def upload(
     user: User = Depends(current_user),
 ):
     data = await file.read()
-    with activity.step(user.id, "Document parser", "pdfplumber · python-docx · python-pptx · zip") as s:
-        stype, text, urls = parse_bytes(file.filename or "upload.txt", data)
+    with activity.step(user.id, "Document parser", "MCP tool file_parser_mcp · pdfplumber · python-docx · python-pptx") as s:
+        stype, text, urls = await parse_document_async(file.filename or "upload.txt", data, user.id)
         s["note"] = f"{file.filename} · {len(text):,} characters"
 
     # SkillOra Safety & Relevance Guardrails
@@ -125,7 +126,7 @@ def resync(sid: int, db: Session = Depends(get_db), user: User = Depends(current
     s = db.get(Source, sid)
     if not s or s.user_id != user.id or s.type != "github":
         raise HTTPException(400, "Only GitHub sources can be re-synced from here; re-upload the file instead.")
-    name, text, detail = fetch_github(s.uri or s.name)
+    name, text, detail = read_github(s.uri or s.name, user.id)
     src, info = service.ingest_text(db, user.id, name=name, stype="github", text=text, uri=s.uri, detail=detail)
     return _ingested(db, src, info)
 

@@ -19,9 +19,11 @@ SkillOra is an agentic resume intelligence and verifiable career profile system 
   - **CrewAI**: Orchestrator-workers for document parsing, job description requirement decomposition (`JobRequirement`), and cascading fuzzy/embedding matching.
   - **Google ADK**: Conversational resume tailoring, real-time bullet generation, and `verifier_callback` guardrail enforcement.
 - **Model Context Protocol (MCP)**:
-  - Official Anthropic FastMCP server implemented in `backend/app/mcp_server.py`.
-  - Exposes 4 tools: `file_parser_mcp`, `ledger_db_lookup_mcp`, `github_crawler_mcp`, `ats_calculator_mcp`.
-  - Live discovery endpoint active at `GET /api/mcp/tools`.
+  - FastMCP server in `backend/app/mcp_server.py`, served over streamable HTTP and mounted at `/mcp/` (gated by `X-MCP-Key`, or loopback only when no key is set).
+  - 4 tools that run the real project code: `file_parser_mcp`, `github_crawler_mcp`, `ledger_db_lookup_mcp`, `ats_calculator_mcp`. The user id comes from the `X-User-Id` header set by our code, never from a model argument.
+  - Real MCP clients: the ADK Coordinator uses `ledger_db_lookup_mcp` and `ats_calculator_mcp` through `McpToolset` (`agents/adk_agents.py`, `_mcp_toolset`); the resume-upload and GitHub-source steps call `file_parser_mcp` / `github_crawler_mcp` through `backend/app/mcp_client.py`, falling back to the same code directly (and logging it) if the server is unreachable.
+  - `GET /api/mcp/tools` (registry with who uses each tool and why, plus live call counts), `POST /api/mcp/ping` (a real tool call). Every call is logged as audit kind `mcp` (Live Logs "MCP" filter).
+  - Frontend page `/mcp` explains it; settings `MCP_ENABLED`, `MCP_URL`, `MCP_SHARED_KEY` in `.env`.
 
 ## Component Conventions
 - Shared layout and core UI live in `frontend/components/`:

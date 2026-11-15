@@ -9,12 +9,13 @@ const KINDS: { key: string; label: string; color: string }[] = [
   { key: "api", label: "API call", color: "bg-blue-50 text-blue-800 border-blue-200" },
   { key: "agent", label: "Agent", color: "bg-emerald-50 text-emerald-800 border-emerald-200" },
   { key: "a2a", label: "A2A", color: "bg-purple-50 text-purple-800 border-purple-200" },
+  { key: "mcp", label: "MCP", color: "bg-indigo-50 text-indigo-800 border-indigo-200" },
   { key: "tool", label: "Tool", color: "bg-amber-50 text-amber-800 border-amber-200" },
   { key: "guardrail", label: "Guardrail", color: "bg-rose-50 text-rose-800 border-rose-200" },
   { key: "callback", label: "Callback", color: "bg-slate-50 text-slate-700 border-slate-200" },
   { key: "error", label: "Error", color: "bg-red-50 text-red-800 border-red-300" },
 ];
-const chip = (k: string) => KINDS.find((x) => x.key === k) ?? KINDS[5];
+const chip = (k: string) => KINDS.find((x) => x.key === k) ?? KINDS.find((x) => x.key === "callback")!;
 
 export default function LiveLogsView({ listClassName = "" }: { listClassName?: string }) {
   const [events, setEvents] = useState<AuditEvent[]>([]);

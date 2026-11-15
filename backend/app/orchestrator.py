@@ -307,7 +307,7 @@ def chat(job_id: int, message: str, uid: int | None = None) -> tuple[str, str]:
             from .agents.adk_agents import chat as adk_chat
 
             with activity.step(uid, "Coordinator", f"Google ADK · {GEMINI_MODELS[0]}"):
-                return adk_chat(f"chat-{job_id}", message, make_tools(job_id), {"job_id": job_id}), "agent"
+                return adk_chat(f"chat-{job_id}", message, make_tools(job_id), {"job_id": job_id, "uid": uid}), "agent"
         except Exception as e:  # noqa: BLE001
             log.warning("Coordinator failed (%s)", e)
     return "I can explain your score, list gaps, rewrite the summary, or include/exclude a project.", "rules"

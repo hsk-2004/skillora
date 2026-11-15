@@ -44,16 +44,50 @@ def health():
     }
 
 
+def _mcp_call_counts() -> dict:
+    """How many times each MCP tool has really been called in this process (from the audit trail)."""
+    from app.core import audit
+
+    counts: dict[str, int] = {}
+    for e in audit.recent(None, "mcp", limit=500):
+        name = e["source"].split("· ")[-1]
+        counts[name] = counts.get(name, 0) + 1
+    return counts
+
+
 @router.get("/mcp/tools")
 def get_mcp_tools():
-    """Model Context Protocol (MCP) Tool Registry endpoint conforming to Criterion #2."""
+    """Model Context Protocol (MCP) tool registry: the tools, who uses them and why, and live call counts."""
+    from app import config
+
+    counts = _mcp_call_counts()
+    tools = [dict(t, calls=counts.get(t["name"], 0)) for t in list_mcp_tools()]
     return {
-        "status": "active",
-        "protocol": "Model Context Protocol (MCP v1.0)",
+        "status": "active" if config.MCP_ENABLED else "disabled",
+        "protocol": "Model Context Protocol (streamable HTTP)",
         "server": "SkillOra-MCP-Tool-Server",
-        "count": len(list_mcp_tools()),
-        "tools": list_mcp_tools(),
+        "endpoint": "/mcp/",
+        "secured": bool(config.MCP_SHARED_KEY) or "loopback only",
+        "count": len(tools),
+        "total_calls": sum(counts.values()),
+        "tools": tools,
     }
+
+
+@router.post("/mcp/ping")
+async def mcp_ping():
+    """A REAL tool call through the MCP protocol (not just a listing): runs the score calculator on a sample input."""
+    import time
+
+    from app import config
+    from app.mcp_client import acall
+
+    t0 = time.time()
+    try:
+        r = await acall("ats_calculator_mcp", {"skills_match": 85, "responsibility": 80, "evidence": 87, "education": 100}, None, timeout=15)
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": str(e)[:200], "endpoint": config.MCP_URL}
+    return {"ok": True, "tool": "ats_calculator_mcp", "ms": int((time.time() - t0) * 1000), "endpoint": config.MCP_URL, "result": r}
 
 
 @router.get("/profile")
@@ -234,7 +268,7 @@ def compliance():
                 "card": ({"name": a2a_card.get("name"), "description": a2a_card.get("description"), "skills": [s.get("name") for s in a2a_card.get("skills", [])]} if a2a_card else None),
                 "server": "Google ADK (Resume Writer)", "client": "CrewAI (Tailoring Planner)", "calls": st["a2a"], "secured": bool(config.A2A_SHARED_KEY)},
         "tracing": {**tr, "dashboard": config.LANGFUSE_HOST},
-        "mcp": {"tools": len(list_mcp_tools())},
+        "mcp": {"tools": len(list_mcp_tools()), "calls": sum(_mcp_call_counts().values())},
         "audit": st,
         "deployment": {"platform": "Render" if __import__("os").getenv("RENDER") else "Local", "public_url": config.PUBLIC_URL, "database": "PostgreSQL" if config.DB_URL.startswith("postgres") else "SQLite"},
     }

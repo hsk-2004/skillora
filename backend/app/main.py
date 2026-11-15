@@ -92,6 +92,30 @@ async def _start_a2a() -> None:
         await app.state.a2a_ctx.__aenter__()
 
 
+# MCP tool server (requirement 2): served over streamable HTTP at /mcp/ ; our agents call it as MCP clients (app/mcp_client.py)
+from app.config import MCP_ENABLED  # noqa: E402
+
+_mcp_app = None
+if MCP_ENABLED:
+    from app.mcp_server import McpGate, mcp as _mcp
+
+    _mcp_app = McpGate(_mcp.streamable_http_app())
+
+
+@app.on_event("startup")
+async def _start_mcp() -> None:
+    if _mcp_app is not None:  # the MCP session manager must run for the mounted app to answer
+        app.state.mcp_ctx = _mcp.session_manager.run()
+        await app.state.mcp_ctx.__aenter__()
+
+
+@app.on_event("shutdown")
+async def _stop_mcp() -> None:
+    ctx = getattr(app.state, "mcp_ctx", None)
+    if ctx is not None:
+        await ctx.__aexit__(None, None, None)
+
+
 # Mount modular routers
 app.include_router(auth_router)
 app.include_router(system_router)
@@ -109,6 +133,9 @@ def root():
         "docs": "/docs",
     }
 
+
+if _mcp_app is not None:
+    app.mount("/mcp", _mcp_app)  # before the catch-all A2A mount below
 
 if _a2a_app is not None:
     app.mount("/", _a2a_app)  # last: serves /a2a/writer/... (card + JSON-RPC); everything else is handled above

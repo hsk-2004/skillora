@@ -34,12 +34,19 @@ const AGENTS = [
   { name: "Matcher", llm: "partial" as const, fw: "CrewAI + Python", does: "Links each requirement to your facts.", tech: "Exact, fuzzy and embedding match" },
   { name: "Tailoring Planner", llm: "llm" as const, fw: "CrewAI", does: "Delegates the writing to the ADK agent.", tech: "A2A client tool" },
   { name: "Resume Writer", llm: "llm" as const, fw: "Google ADK", does: "Writes bullets and a summary from approved facts.", tech: "A2A server · LlmAgent" },
-  { name: "Verifier", llm: "none" as const, fw: "Google ADK", does: "Checks every bullet against its source.", tech: "after_model_callback" },
+  { name: "Verifier", llm: "none" as const, fw: "Google ADK", does: "Checks every bullet against its source.", tech: "after_model_callback (a callback, not a separate agent)" },
   { name: "Coordinator", llm: "llm" as const, fw: "Google ADK", does: "Handles the chat: edits bullets, explains scores.", tech: "Tools + sub-agent" },
+  { name: "Project Selector", llm: "llm" as const, fw: "Google ADK", does: "Explains why a project fits the job and includes or drops it.", tech: "Sub-agent of the Coordinator" },
   { name: "Guardrails", llm: "none" as const, fw: "Python", does: "Blocks attacks, toxic text, bad files and bad tool output.", tech: "Input, prompt, tool and output layers" },
   { name: "Scoring Engine", llm: "none" as const, fw: "Python", does: "Calculates the job-fit score.", tech: "Deterministic, no LLM" },
   { name: "MCP Tool Server", llm: "none" as const, fw: "FastMCP", does: "Gives agents 4 tools: parser, ledger, GitHub, score.", tech: "Model Context Protocol" },
 ];
+
+// Counts are worked out from the list above, so they always match the cards.
+const CREW_AGENTS = AGENTS.filter((a) => a.fw.startsWith("CrewAI")).length;
+const ADK_AGENTS = AGENTS.filter((a) => a.fw === "Google ADK" && a.llm === "llm").length;
+const ADK_CALLBACKS = AGENTS.filter((a) => a.fw === "Google ADK" && a.llm === "none").length;
+const PLAIN_PARTS = AGENTS.filter((a) => a.llm === "none").length; // plain Python, no AI model
 
 const ALWAYS = ["Guardrails", "Callbacks and live logs", "Langfuse tracing", "MCP tools"];
 
@@ -131,6 +138,28 @@ export default function AgentArchitectureModal({ isOpen, onClose }: { isOpen: bo
                 LLM agents call Google&apos;s Gemini API. Primary model: <b>{main}</b>
                 {models.length > 1 && <> · if it is busy they fall back to {models.slice(1).join(", ")}</>}.
               </p>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                  <p className="text-2xl font-serif font-bold text-emerald-800 leading-none">{CREW_AGENTS}</p>
+                  <p className="text-[11px] font-bold text-emerald-800 mt-1">CrewAI agents</p>
+                  <p className="text-[10px] text-emerald-700">The step-by-step pipeline</p>
+                </div>
+                <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5">
+                  <p className="text-2xl font-serif font-bold text-blue-800 leading-none">{ADK_AGENTS}</p>
+                  <p className="text-[11px] font-bold text-blue-800 mt-1">Google ADK agents</p>
+                  <p className="text-[10px] text-blue-700">Live writing and chat, plus {ADK_CALLBACKS} callback (Verifier)</p>
+                </div>
+                <div className="rounded-xl border border-[#DDD7CA] bg-white px-3 py-2.5">
+                  <p className="text-2xl font-serif font-bold text-[#141A16] leading-none">{CREW_AGENTS + ADK_AGENTS}</p>
+                  <p className="text-[11px] font-bold text-[#141A16] mt-1">AI agents in total</p>
+                  <p className="text-[10px] text-[#556056]">Each one calls the Gemini model</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <p className="text-2xl font-serif font-bold text-slate-700 leading-none">{PLAIN_PARTS}</p>
+                  <p className="text-[11px] font-bold text-slate-700 mt-1">Python parts</p>
+                  <p className="text-[10px] text-slate-600">Verifier, Guardrails, Scoring, MCP: no AI model. Matcher mixes Python and AI.</p>
+                </div>
+              </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {AGENTS.map((a) => (
                 <div key={a.name} className="bg-white border border-[#E8E3D7] rounded-xl p-4 space-y-1.5">

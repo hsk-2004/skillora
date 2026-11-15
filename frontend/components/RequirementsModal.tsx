@@ -105,26 +105,11 @@ export default function RequirementsModal({ isOpen, onClose }: RequirementsModal
   const handleTestMcp = async () => {
     setMcpLoading(true);
     try {
-      const res = await fetch(`${API}/api/mcp/tools`);
-      if (res.ok) {
-        const json = await res.json();
-        setMcpData(json);
-      } else {
-        setMcpData({ error: `HTTP ${res.status}: ${res.statusText}` });
-      }
+      // A real tool call through the MCP protocol (the score calculator on a sample input), not just a list of tool names.
+      const res = await fetch(`${API}/api/mcp/ping`, { method: "POST" });
+      setMcpData(res.ok ? await res.json() : { ok: false, error: `HTTP ${res.status}: ${res.statusText}` });
     } catch {
-      setMcpData({
-        status: "active",
-        server: "SkillOra-MCP-Server (FastMCP v1.2)",
-        endpoint: "http://127.0.0.1:8000/api/mcp/tools",
-        tools_registered: 4,
-        tools: [
-          { name: "file_parser_mcp", type: "MCP Document Tool", status: "online" },
-          { name: "ledger_db_lookup_mcp", type: "MCP Database Tool", status: "online" },
-          { name: "github_crawler_mcp", type: "MCP GitHub API Tool", status: "online" },
-          { name: "ats_calculator_mcp", type: "MCP Analytics Tool", status: "online" }
-        ]
-      });
+      setMcpData({ ok: false, error: "Backend not reachable, so no MCP call was made." });
     } finally {
       setMcpLoading(false);
     }
@@ -151,8 +136,8 @@ export default function RequirementsModal({ isOpen, onClose }: RequirementsModal
           <div className="bg-[#141A16] text-[#A7F3D0] p-4 border-b border-[#2C3830] font-mono text-xs overflow-x-auto relative">
             <div className="flex items-center justify-between text-[#FAF9F5] pb-2 border-b border-[#2C3830] mb-2 font-sans">
               <span className="font-bold flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                Live FastMCP Server Response (Criterion #2 Verified)
+                <span className={`w-2 h-2 rounded-full ${mcpData.ok ? "bg-emerald-400 animate-pulse" : "bg-rose-400"}`} />
+                {mcpData.ok ? `Live MCP tool call: ${mcpData.tool} answered in ${mcpData.ms} ms (via the MCP protocol)` : "MCP tool call failed"}
               </span>
               <button onClick={() => setMcpData(null)} className="text-gray-400 hover:text-white text-xs">Close</button>
             </div>

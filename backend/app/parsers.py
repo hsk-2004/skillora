@@ -15,18 +15,7 @@ PII_RE = {
     "aadhaar": re.compile(r"\b\d{4}\s\d{4}\s\d{4}\b"),
     "card": re.compile(r"\b(?:\d[ -]?){13,16}\b"),
 }
-INJECTION_RE = re.compile(
-    r"(ignore (all )?(previous|prior|above|system|other) (instructions|prompts|rules|constraints|directives)|"
-    r"disregard (all |the )?(system|above|prior|previous|rules|guardrails|constraints|evidence)|"
-    r"you are now (an? )?(unrestricted|jailbroken|developer mode|dan|evaluator|assistant)|"
-    r"reveal (your |all |the )?(system |developer |internal )?(prompt|instructions)|"
-    r"system override|bypass (all )?(guardrails|safety|verification|checks)|"
-    r"override (system |all )?(instructions|rules|safety|guardrails)|"
-    r"grant (root|admin|full) (access|privilege|permissions)|"
-    r"output:\s*[\"']?candidate is a 100% perfect match|"
-    r"<\s*script)",
-    re.I,
-)
+from .core.guardrail import INJECTION_RE  # one shared list of injection patterns for uploads, job descriptions and agent prompts
 
 
 class InputRejected(ValueError):

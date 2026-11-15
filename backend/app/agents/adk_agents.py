@@ -18,7 +18,7 @@ from google.genai import types
 
 FAST = types.GenerateContentConfig(thinking_config=types.ThinkingConfig(thinking_level="minimal"))  # rewriting needs no deep reasoning
 
-from .. import activity
+from .. import activity, config
 from ..engine.verify import verify_bullet
 from ..llm import parse_json, with_models
 from ..vocab import find_skills
@@ -150,6 +150,8 @@ even if it goes beyond the verified facts. Do not add claims they did not ask fo
 - Change summary: `set_summary`. Change a bullet: `set_bullet`. New bullet: `add_bullet`. Remove: `delete_bullet`.
   Skills list: `set_skills`. Undo or revert: `undo_last_edit` (call it once per step the user wants to go back).
 - Include or exclude a project or job: `set_project_included`. Score questions: `explain_score`. Missing skills: `list_gaps`.
+- MCP tools (read-only): `ledger_db_lookup_mcp` looks up the user's facts and their source quotes (use it when asked what evidence or facts they have);
+  `ats_calculator_mcp` computes a what-if score from the five parts (use it for "what would my score be if ..." questions, passing values 0-100).
 - CRITICAL: When the user asks to strengthen bullets, use XYZ metrics, highlight microservices, or tailor summary, DO NOT ASK FOR CLARIFICATION. CALL `add_bullet`, `set_bullet`, or `set_summary` IMMEDIATELY to commit the change to the resume.
 - NEVER say you changed, reverted or restored something unless the tool call returned ok. If a tool returns an error, say so.
 Reply in 1-2 short sentences that state exactly what changed."""
@@ -160,7 +162,7 @@ def make_coordinator(model: str, tools: list) -> LlmAgent:
         name="project_selector", model=model,
         description="Chooses which projects to feature based on task relevance to the job.",
         instruction="You explain in one sentence why a project is or is not relevant to the job, then use set_project_included if asked.",
-        tools=[t for t in tools if t.__name__ == "set_project_included"],
+        tools=[t for t in tools if getattr(t, "__name__", "") == "set_project_included"],
     )
     return LlmAgent(
         name="coordinator", model=model, instruction=COORDINATOR_INSTRUCTION, tools=tools, sub_agents=[selector], generate_content_config=FAST,
@@ -169,9 +171,36 @@ def make_coordinator(model: str, tools: list) -> LlmAgent:
     )
 
 
+def _mcp_toolset():
+    """ADK McpToolset: the Coordinator uses two tools of the MCP server through the MCP protocol. The user id is added to every call
+    from session state by our own code (header_provider), so the model can never ask for another user's facts."""
+    from google.adk.tools.mcp_tool import McpToolset, StreamableHTTPConnectionParams
+
+    headers = {"X-MCP-Key": config.MCP_SHARED_KEY} if config.MCP_SHARED_KEY else {}
+    return McpToolset(
+        connection_params=StreamableHTTPConnectionParams(url=config.MCP_URL, headers=headers, timeout=30),
+        tool_filter=["ledger_db_lookup_mcp", "ats_calculator_mcp"],
+        header_provider=lambda ctx: {"X-User-Id": str(ctx.state.get("uid"))} if ctx.state.get("uid") is not None else {},
+    )
+
+
 def chat(session_key: str, message: str, tools: list, state: dict | None = None) -> str:
+    async def run_with_mcp(model: str) -> str:
+        toolset = _mcp_toolset() if config.MCP_ENABLED else None
+        try:
+            agent = make_coordinator(model, tools + ([toolset] if toolset else []))
+            return await _ask(agent, session_key, message, state)
+        finally:
+            if toolset is not None:
+                await toolset.close()
+
     def go(model: str) -> str:
-        agent = make_coordinator(model, tools)
-        return asyncio.run(_ask(agent, session_key, message, state))
+        try:
+            return asyncio.run(run_with_mcp(model))
+        except Exception as e:  # noqa: BLE001 - MCP server unreachable: the Coordinator still works with its Python tools
+            if not config.MCP_ENABLED:
+                raise
+            activity.event(state.get("uid") if state else None, "Coordinator", "MCP toolset unavailable", note=str(e)[:160])
+            return asyncio.run(_ask(make_coordinator(model, tools), session_key, message, state))
 
     return with_models(go)

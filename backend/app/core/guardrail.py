@@ -22,6 +22,21 @@ INJECTION_RE = re.compile(
     r"override (system |all )?(instructions|rules|safety|guardrails)|"
     r"grant (root|admin|full) (access|privilege|permissions)|"
     r"output:\s*[\"']?candidate is a 100% perfect match|"
+    # -- attacks on the checking steps: "bypass the resume", "disable the verification", "get around the filter"
+    r"\b(?:bypass|circumvent|get around|override|disable|turn off)\s+(?:all\s+|the\s+|any\s+|your\s+|this\s+)?"
+    r"(?:resume|cv|screening|ats|filters?|verification|verifier|ledger|evidence|review|validation|checks?|rules|guardrails?|safety)\b|"
+    # -- ranking / score manipulation: "rank it at top", "put me first", "treat this resume as the best"
+    r"\b(?:rank|rate|score|place|put|list|mark|treat|consider|select|shortlist|recommend)\s+"
+    r"(?:it|me|this|my\s+(?:resume|cv|profile|application)|the\s+(?:candidate|resume|cv|applicant))\s+"
+    r"(?:at|as|in|on|to)?\s*(?:the\s+)?(?:top|first|#\s?1|number\s+one|highest|best|perfect)\b|"
+    r"\b(?:give|assign|award|output|return|set|grant)\s+(?:me|it|this\s+(?:resume|cv|candidate|applicant)|this|the\s+candidate|the\s+resume|my\s+resume)?\s*(?:an?\s+)?"
+    r"(?:score|rating|ranking|grade)\s+(?:of\s+|as\s+)?(?:100|10/10|perfect|maximum|max|highest|top)\b|"
+    r"\b(?:candidate|applicant|resume|cv|profile|me|this\s+person)\s+(?:is|are)\s+(?:an?\s+|the\s+)?(?:(?:100\s*%|perfect|ideal|flawless)\s+){1,2}(?:match|fit)\b|"
+    r"\balways\s+(?:rank|rate|recommend|select|choose|hire|prefer|shortlist)\s+(?:this|me|my)\b|"
+    # -- telling the system to skip its checks
+    r"\b(?:do\s+not|don'?t|never|stop)\s+(?:flag|check|verify|validate|penali[sz]e)\s+(?:any|the|this|my|these|those|it|them|anything|claims?)\b|"
+    r"\b(?:new|updated|real|actual)\s+instructions?\s*[:\-]|"
+    r"\bforget\s+(?:everything|all|your|the)\s+(?:above|previous|prior|instructions|rules)\b|"
     r"<\s*script)",
     re.I,
 )
