@@ -77,3 +77,12 @@ nextjs-portal,
   opacity: 0 !important;
   pointer-events: none !important;
 }
+
+/* Indeterminate progress bar used by the dynamic full-screen loader */
+@keyframes skl-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+.skl-indeterminate {
+  animation: skl-slide 1.3s ease-in-out infinite;
+}

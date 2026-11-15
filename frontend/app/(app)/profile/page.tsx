@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useStore } from "@/lib/store";
+import { useStore, WIZARD_STATE_KEY } from "@/lib/store";
 import { api, type ExtractedResumeData } from "@/lib/api";
 import type { Fact } from "@/lib/data";
 
@@ -378,6 +378,34 @@ export default function ProfilePage() {
   const [repoSort, setRepoSort] = useState<"relevant" | "stars" | "pushed" | "name">("relevant");
   const [buildingKnowledge, setBuildingKnowledge] = useState<string | null>(null);
 
+  // Remember the wizard position, GitHub user and chosen repos for this tab, so leaving this page (for example to /verify)
+  // and coming back resumes where you were instead of restarting at step 1.
+  const [wizardRestored, setWizardRestored] = useState(false);
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(WIZARD_STATE_KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s.viewMode === "wizard" || s.viewMode === "hub") setViewMode(s.viewMode);
+        if (Number.isInteger(s.step) && s.step >= 1 && s.step <= 4) setStep(s.step);
+        if (Number.isInteger(s.maxStepReached) && s.maxStepReached >= 1 && s.maxStepReached <= 4) setMaxStepReached(s.maxStepReached);
+        if (typeof s.githubUser === "string" && s.githubUser) setGithubUser(s.githubUser);
+        if (Array.isArray(s.selectedRepos)) setSelectedRepos(s.selectedRepos.filter((r: unknown) => typeof r === "string"));
+      }
+    } catch {
+      /* storage unavailable or corrupt: start fresh */
+    }
+    setWizardRestored(true);
+  }, []);
+  useEffect(() => {
+    if (!wizardRestored) return;
+    try {
+      sessionStorage.setItem(WIZARD_STATE_KEY, JSON.stringify({ viewMode, step, maxStepReached, githubUser, selectedRepos }));
+    } catch {
+      /* storage unavailable */
+    }
+  }, [wizardRestored, viewMode, step, maxStepReached, githubUser, selectedRepos]);
+
   // GitHub Discovery: Fetch Real Repos from Backend / GitHub API
   const fetchRepos = useCallback(
     async (userToFetch: string) => {
@@ -432,10 +460,10 @@ export default function ProfilePage() {
   );
 
   useEffect(() => {
-    if (githubUser) {
+    if (githubUser && wizardRestored) {
       fetchRepos(githubUser);
     }
-  }, [fetchRepos, githubUser]);
+  }, [fetchRepos, githubUser, wizardRestored]);
 
   // Extract and apply candidate details from resume
   const [extractedLoaded, setExtractedLoaded] = useState(false);

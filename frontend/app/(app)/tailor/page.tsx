@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
 import ResumePreview from "@/components/ResumePreview";
+import ScoreSummary from "@/components/ScoreSummary";
 
 const nums = (s: string) => s.match(/\d+(\.\d+)?/g) ?? [];
 
@@ -152,6 +153,12 @@ const sendDraft = (id: string, text: string) =>
 const clearDraft = (id: string) =>
   window.dispatchEvent(new CustomEvent("resume-draft-clear", { detail: { id } }));
 
+const DECISIONS_KEY = "skillora.tailorDecisions";
+
+// Stable identity for a suggestion. Its position in the list changes after every edit (the list is re-ranked), so position can't be used.
+const suggestionKey = (r: { action_type?: string; keyword_id?: string | null; project?: string; suggested_bullet?: string; title?: string }) =>
+  [r.action_type ?? "", r.keyword_id ?? "", r.project ?? "", (r.suggested_bullet ?? r.title ?? "").slice(0, 80)].join("|");
+
 export default function TailorPage() {
   const chatBoxRef = useRef<HTMLDivElement>(null);
   const st = useStore();
@@ -162,9 +169,47 @@ export default function TailorPage() {
   const [showResume, setShowResume] = useState(true);
   const [activeCitation, setActiveCitation] = useState<{ bulletId: string; factText: string; span: string } | null>(null);
 
-  // Track accepted and rejected suggestions
+  // Track accepted and rejected suggestions. Saved in the browser (per job) so leaving and reopening this page, even with a slow
+  // database, still shows "Added to Resume" straight away instead of offering "Accept & Add" a second time.
   const [acceptedIds, setAcceptedIds] = useState<string[]>([]);
   const [rejectedIds, setRejectedIds] = useState<string[]>([]);
+  const [decisionsRestored, setDecisionsRestored] = useState(false);
+  const savedJobId = useRef<number | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DECISIONS_KEY);
+      if (raw) {
+        const d = JSON.parse(raw);
+        const strs = (x: unknown) => (Array.isArray(x) ? x.filter((v): v is string => typeof v === "string") : []);
+        setAcceptedIds(strs(d.accepted));
+        setRejectedIds(strs(d.rejected));
+        savedJobId.current = typeof d.jobId === "number" ? d.jobId : null;
+      }
+    } catch {
+      /* storage unavailable or corrupt: start fresh */
+    }
+    setDecisionsRestored(true);
+  }, []);
+
+  // A different job means different suggestions: forget the old decisions.
+  useEffect(() => {
+    if (!decisionsRestored || st.jobId == null) return;
+    if (savedJobId.current !== null && savedJobId.current !== st.jobId) {
+      setAcceptedIds([]);
+      setRejectedIds([]);
+    }
+    savedJobId.current = st.jobId;
+  }, [decisionsRestored, st.jobId]);
+
+  useEffect(() => {
+    if (!decisionsRestored) return;
+    try {
+      localStorage.setItem(DECISIONS_KEY, JSON.stringify({ jobId: st.jobId ?? savedJobId.current, accepted: acceptedIds, rejected: rejectedIds }));
+    } catch {
+      /* storage unavailable */
+    }
+  }, [decisionsRestored, st.jobId, acceptedIds, rejectedIds]);
 
   useEffect(() => {
     chatBoxRef.current?.scrollTo({ top: chatBoxRef.current.scrollHeight, behavior: "smooth" });
@@ -194,9 +239,11 @@ export default function TailorPage() {
   };
 
   // Build the Top 5 Best Suggestions based on target JD without raw fact IDs
-  const topSuggestions: SuggestionItem[] = (recs && recs.length > 0)
-    ? recs.map((r, i) => ({
-        id: `rec-${i}`,
+  const topSuggestions: SuggestionItem[] = !st.ready
+    ? [] // still loading from the database: show the skeleton below, never the demo cards
+    : (recs && recs.length > 0)
+    ? recs.map((r) => ({
+        id: suggestionKey(r),
         title: r.title,
         impact: r.impact ? (typeof r.impact === "number" ? `+${r.impact} pts` : r.impact) : "+6 pts",
         verified: r.verified ?? false,
@@ -260,18 +307,36 @@ export default function TailorPage() {
         },
       ];
 
-  const handleAcceptSuggestion = (sug: SuggestionItem) => {
-    // 1. If linked to keyword, decide keyword
-    if (sug.keyword_id) {
-      st.decideKeyword(sug.keyword_id, true);
-    } else {
-      // 2. Add bullet to resume
-      st.addBullet(sug.project, sug.suggested_bullet, sug.verified);
-    }
+  // While a suggestion is being saved, the app-wide loader (driven by the store) blocks the page. The card only says "Added to Resume" once it is really saved.
+  const [applying, setApplying] = useState(false);
 
-    // 3. Mark as accepted in local UI state
-    setAcceptedIds((prev) => [...prev, sug.id]);
-    setRejectedIds((prev) => prev.filter((id) => id !== sug.id));
+  // Once the job is loaded the resume itself is the truth (so Undo and edits are respected). Until then, use the saved decision.
+  const isSuggestionAccepted = (sug: SuggestionItem) => {
+    if (live && st.jobId != null) {
+      if (sug.keyword_id) return st.keywords.some((k) => k.id === sug.keyword_id && k.state === "accepted");
+      const t = sug.suggested_bullet.trim();
+      return bullets.some((b) => b.text.trim() === t);
+    }
+    return acceptedIds.includes(sug.id);
+  };
+
+  const handleAcceptSuggestion = async (sug: SuggestionItem) => {
+    if (applying) return;
+    setApplying(true);
+    try {
+      // 1. If linked to keyword, decide keyword; otherwise add the bullet to the resume
+      const ok = sug.keyword_id
+        ? await st.decideKeyword(sug.keyword_id, true)
+        : await st.addBullet(sug.project, sug.suggested_bullet, sug.verified);
+
+      // 2. Mark as accepted only after the save really succeeded
+      if (ok) {
+        setAcceptedIds((prev) => [...prev, sug.id]);
+        setRejectedIds((prev) => prev.filter((id) => id !== sug.id));
+      }
+    } finally {
+      setApplying(false);
+    }
   };
 
   const handleRejectSuggestion = (sugId: string) => {
@@ -433,6 +498,9 @@ export default function TailorPage() {
         </div>
       </div>
 
+      {/* Live job-fit score: recalculated by the scoring engine after every change */}
+      <ScoreSummary score={st.score} components={st.components} profileLabel={st.scoreProfile?.label} />
+
       {/* Main Split Layout: Resume Canvas & Suggestions (Left) vs ADK Chat Drawer (Right) */}
       <div className={`grid grid-cols-1 ${showResume ? "lg:grid-cols-3" : "lg:grid-cols-2"} gap-6 items-start`}>
         
@@ -457,9 +525,21 @@ export default function TailorPage() {
               </span>
             </div>
 
+            {!st.ready && (
+              <div className="space-y-3.5" aria-busy="true">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="p-4 rounded-2xl border border-[#ECE7DD] bg-[#FAF9F5] animate-pulse space-y-2">
+                    <div className="h-3 w-2/3 rounded bg-[#E5E1D5]" />
+                    <div className="h-3 w-full rounded bg-[#ECE7DD]" />
+                    <div className="h-8 w-1/3 rounded bg-[#E5E1D5]" />
+                  </div>
+                ))}
+                <p className="text-xs text-[#78827A]">Loading your saved resume…</p>
+              </div>
+            )}
             <div className="space-y-3.5">
               {topSuggestions.map((sug, idx) => {
-                const isAccepted = acceptedIds.includes(sug.id);
+                const isAccepted = isSuggestionAccepted(sug);
                 const isRejected = rejectedIds.includes(sug.id);
 
                 if (isRejected) {

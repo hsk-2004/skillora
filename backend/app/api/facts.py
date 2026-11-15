@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app import service
 from app.api.deps import current_user, get_user_fact
-from app.db import Fact, User, get_db, next_seq
+from app.db import Fact, Source, User, get_db, next_seq
 
 router = APIRouter(prefix="/api/facts", tags=["facts"])
 
@@ -130,7 +130,7 @@ def unverify_project_all(b: ProjectActionIn, db: Session = Depends(get_db), user
     return {"updated": count, "project": b.project, "status": "pending"}
 
 
-@router.delete("/project/{project_name}")
+@router.delete("/project/{project_name:path}")  # :path so names containing "/" (e.g. "AI/ML Intern") still route
 def delete_project_facts(project_name: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
     """Delete a project and all associated facts and sources."""
     target = project_name.strip().lower()
@@ -139,7 +139,7 @@ def delete_project_facts(project_name: str, db: Session = Depends(get_db), user:
     deleted_sources = 0
     for s in sources:
         s_base = s.name.split("/")[-1].lower()
-        if target == s.name.lower() or target == s_base or target in s_base:
+        if target == s.name.lower() or target == s_base:  # exact match only: a substring match could delete unrelated sources
             db.delete(s)
             deleted_sources += 1
 
@@ -148,7 +148,7 @@ def delete_project_facts(project_name: str, db: Session = Depends(get_db), user:
     deleted_facts = 0
     for f in facts:
         p_base = (f.project or "").split("/")[-1].lower()
-        if target == (f.project or "").lower() or target == p_base or target in p_base:
+        if target == (f.project or "").lower() or target == p_base:  # exact match only: "Map" must not delete "Mappers"
             db.delete(f)
             deleted_facts += 1
 

@@ -8,12 +8,15 @@ import type { ReactNode } from "react";
 import { useStore } from "@/lib/store";
 import Ambient from "./Ambient";
 import AgentArchitectureModal from "./AgentArchitectureModal";
+import LiveLogsModal from "./LiveLogsModal";
+import FullScreenLoader from "./FullScreenLoader";
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const path = usePathname();
   const wide = path === "/tailor"; // the Tailor workspace uses the full browser width
-  const { busy, error, notice, mode, profile, logout } = useStore();
+  const { busy, blocking, error, notice, mode, profile, logout } = useStore();
   const [showAgentModal, setShowAgentModal] = useState(false);
+  const [showLogs, setShowLogs] = useState(false); // popup, so the page and any running task stay untouched
 
   return (
     <div className="min-h-screen bg-[#FAF9F5] text-[#141A16] flex flex-col relative selection:bg-[#DCFCE7] selection:text-[#166534]">
@@ -54,13 +57,15 @@ export default function AppShell({ children }: { children: ReactNode }) {
               <span>Agent Architecture</span>
             </button>
 
-            <Link
-              href="/logs"
-              className="text-xs font-semibold text-[#556056] hover:text-[#1E6B38] px-3 py-1.5 rounded-full hover:bg-white border border-transparent hover:border-[#E5E1D5] transition-all hidden md:flex items-center gap-1.5"
+            <button
+              type="button"
+              onClick={() => setShowLogs(true)}
+              className="text-xs font-semibold text-[#556056] hover:text-[#1E6B38] px-3 py-1.5 rounded-full hover:bg-white border border-transparent hover:border-[#E5E1D5] transition-all hidden md:flex items-center gap-1.5 cursor-pointer"
+              title="Open live logs without leaving this page"
             >
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span>Live Logs</span>
-            </Link>
+            </button>
 
             <Link
               href="/observability"
@@ -178,11 +183,16 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-4">
             <Link href="/job" className="hover:text-[#141A16] hover:underline">Workspace</Link>
             <Link href="/profile" className="hover:text-[#141A16] hover:underline">Candidate Profile</Link>
-            <Link href="/logs" className="hover:text-[#141A16] hover:underline">Live Logs</Link>
+            <button type="button" onClick={() => setShowLogs(true)} className="hover:text-[#141A16] hover:underline cursor-pointer">Live Logs</button>
             <Link href="/faculty" className="hover:text-[#141A16] hover:underline">System Architecture</Link>
           </div>
         </div>
       </footer>
+
+      {/* Dynamic loader for any running step. Keyed by the label so its timer restarts for each new step. */}
+      {blocking && <FullScreenLoader key={busy} message={`${busy}…`} actionLabel="View live logs" onAction={() => setShowLogs(true)} />}
+
+      {showLogs && <LiveLogsModal onClose={() => setShowLogs(false)} busy={busy || undefined} />}
 
       {/* Interactive Agent Architecture Modal on Every Screen */}
       <AgentArchitectureModal

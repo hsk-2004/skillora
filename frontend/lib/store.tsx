@@ -8,6 +8,9 @@ import {
 import { useRouter } from "next/navigation";
 import { api, clearToken, getToken, setToken, type Eligibility, type ScoringProfile, type ApiBullet, type ApiKeyword, type ApiProject, type JobView, type Profile, type Recommendation, type ScoreComponent } from "./api";
 
+// sessionStorage key for the profile wizard position, so leaving the page and coming back resumes where you were.
+export const WIZARD_STATE_KEY = "skillora.profileWizard";
+
 /**
  * One store for every screen. When the FastAPI backend is reachable (`live`) all data comes from it
  * (CrewAI + Google ADK agents behind the API). If it is not, the same screens run on the bundled demo
@@ -17,6 +20,7 @@ interface Store {
   live: boolean;
   ready: boolean;
   busy: string; // label of the long-running agent step, "" when idle
+  blocking: boolean; // true while a busy step should cover the screen with the loader (false for inline work such as chat)
   error: string;
   notice: string;
   llm: boolean;
@@ -59,12 +63,12 @@ interface Store {
   skills: string[];
   setBullets: (b: ApiBullet[]) => void;
   editBullet: (id: string, text: string) => Promise<void>;
-  addBullet: (project: string, text: string, verified?: boolean) => Promise<void>;
+  addBullet: (project: string, text: string, verified?: boolean) => Promise<boolean>; // true once the bullet is really on the resume
   editSummary: (text: string) => Promise<void>;
   regenerate: () => Promise<void>;
   undo: () => Promise<void>;
   keywords: ApiKeyword[];
-  decideKeyword: (id: string, accept: boolean) => Promise<void>;
+  decideKeyword: (id: string, accept: boolean) => Promise<boolean>; // true once the decision is saved
   chat: { from: string; text: string }[];
   sendChat: (m: string) => Promise<void>;
   score: number;
@@ -99,6 +103,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [llm, setLlm] = useState(false);
   const [busy, setBusy] = useState("");
+  const [busyInline, setBusyInline] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [profile, setProfile] = useState<Profile>(demoProfile);
@@ -144,12 +149,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [refreshLedger, router]);
 
   /** Run an API action with a busy label and uniform error handling. */
-  const run = useCallback(async <T,>(label: string, fn: () => Promise<T>): Promise<T | undefined> => {
+  const run = useCallback(async <T,>(label: string, fn: () => Promise<T>, inline = false): Promise<T | undefined> => {
     setBusy(label);
+    setBusyInline(inline);
     setError("");
     try { return await fn(); }
     catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-    finally { setBusy(""); }
+    finally { setBusy(""); setBusyInline(false); }
   }, []);
 
   const flash = (m: string) => { setNotice(m); setTimeout(() => setNotice(""), 6000); };
@@ -176,8 +182,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       (r.stale ? `, ${r.stale} marked stale` : "") + (r.warnings.length ? ` - note: ${r.warnings.join(", ")}` : "") + ". Review them on Verify Facts.";
 
     return {
-      live, ready, busy, error, notice, llm, profile,
-      logout: () => { clearToken(); window.location.href = "/login"; },
+      live, ready, busy, blocking: busy !== "" && !busyInline, error, notice, llm, profile,
+      logout: () => {
+        try { sessionStorage.removeItem(WIZARD_STATE_KEY); } catch { /* storage unavailable */ }
+        clearToken();
+        window.location.href = "/login";
+      },
       saveProfile: async (p) => { setProfile(p); if (live) await run("Saving", () => api.saveProfile(p)); },
 
       sources,
@@ -206,8 +216,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         flash(m);
         return m;
       },
-      resync: async (id) => { const r = await run("Re-reading the repo from GitHub", () => api.resync(id)); if (!r) return ""; await refreshLedger(); if (job) setJob(await api.latestJob()); const m = ingestMsg(r); flash(m); return m; },
-      reupload: async (id, f) => { const r = await run("Re-reading the updated file", () => api.upload(f, id)); if (!r) return ""; await refreshLedger(); if (job) setJob(await api.latestJob()); const m = ingestMsg(r); flash(m); return m; },
+      resync: async (id) => { const r = await run("Re-reading the repo from GitHub", async () => { const x = await api.resync(id); await refreshLedger(); if (job) setJob(await api.latestJob()); return x; }); if (!r) return ""; const m = ingestMsg(r); flash(m); return m; },
+      reupload: async (id, f) => { const r = await run("Re-reading the updated file", async () => { const x = await api.upload(f, id); await refreshLedger(); if (job) setJob(await api.latestJob()); return x; }); if (!r) return ""; const m = ingestMsg(r); flash(m); return m; },
       removeSource: async (id) => {
         if (!live) return;
         await run("Removing the source, its facts and its cache", async () => {
@@ -223,19 +233,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       facts,
       setFactStatus: async (id, s) => {
         if (!live) return setFacts((fs) => fs.map((f) => (f.id === id ? { ...f, status: s } : f)));
-        const f = await run("Saving", () => api.setFact(id, s));
-        if (f) { setFacts((fs) => fs.map((x) => (x.id === id ? { ...x, ...f } : x))); if (job) setJob(await api.latestJob()); }
+        await run("Saving", async () => {
+          const f = await api.setFact(id, s);
+          setFacts((fs) => fs.map((x) => (x.id === id ? { ...x, ...f } : x)));
+          if (job) setJob(await api.latestJob());
+        });
       },
       editFact: async (id, text) => {
         if (!live) return setFacts((fs) => fs.map((f) => (f.id === id ? { ...f, text, status: "verified" } : f)));
-        const f = await run("Saving", () => api.editFact(id, text));
-        if (f) { setFacts((fs) => fs.map((x) => (x.id === id ? { ...x, ...f } : x))); if (job) setJob(await api.latestJob()); }
+        await run("Saving", async () => {
+          const f = await api.editFact(id, text);
+          setFacts((fs) => fs.map((x) => (x.id === id ? { ...x, ...f } : x)));
+          if (job) setJob(await api.latestJob());
+        });
       },
       deleteFact: async (id) => {
         if (!live) return setFacts((fs) => fs.filter((f) => f.id !== id));
-        await run("Deleting claim", () => api.deleteFact(id));
-        setFacts((fs) => fs.filter((f) => f.id !== id));
-        if (job) setJob(await api.latestJob());
+        await run("Deleting claim", async () => {
+          await api.deleteFact(id);
+          setFacts((fs) => fs.filter((f) => f.id !== id));
+          if (job) setJob(await api.latestJob());
+        });
       },
       createFact: async (data) => {
         if (!live) {
@@ -243,48 +261,54 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           setFacts((fs) => [...fs, { id: fakeId, ...data, span: data.span || "", status: data.status || "verified", sourceType: "note", source: "self-declared", category: data.category as any }]);
           return;
         }
-        const created = await run("Adding claim", () => api.createFact(data));
-        if (created) {
+        await run("Adding claim", async () => {
+          await api.createFact(data);
           await refreshLedger();
           if (job) setJob(await api.latestJob());
-        }
+        });
       },
       verifyProject: async (project) => {
         if (!live) {
           setFacts((fs) => fs.map((f) => (f.project === project ? { ...f, status: "verified" } : f)));
           return;
         }
-        await run(`Verifying ${project}`, () => api.verifyProject(project));
-        await refreshLedger();
-        if (job) setJob(await api.latestJob());
+        await run(`Verifying ${project}`, async () => {
+          await api.verifyProject(project);
+          await refreshLedger();
+          if (job) setJob(await api.latestJob());
+        });
       },
       unverifyProject: async (project) => {
         if (!live) {
           setFacts((fs) => fs.map((f) => (f.project === project ? { ...f, status: "pending" } : f)));
           return;
         }
-        await run(`Unverifying ${project}`, () => api.unverifyProject(project));
-        await refreshLedger();
-        if (job) setJob(await api.latestJob());
+        await run(`Unverifying ${project}`, async () => {
+          await api.unverifyProject(project);
+          await refreshLedger();
+          if (job) setJob(await api.latestJob());
+        });
       },
       deleteProject: async (project) => {
         if (!live) {
           setFacts((fs) => fs.filter((f) => f.project !== project));
           return;
         }
-        await run(`Deleting project ${project}`, () => api.deleteProject(project));
-        await refreshLedger();
-        if (job) setJob(await api.latestJob());
+        await run(`Deleting project ${project}`, async () => {
+          await api.deleteProject(project);
+          await refreshLedger();
+          if (job) setJob(await api.latestJob());
+        });
       },
       confirmGroup: async (project) => {
         if (!live) return setFacts((fs) => fs.map((f) => ((project === null || f.project === project) && f.status === "pending" ? { ...f, status: "verified" } : f)));
-        const r = await run("Confirming", () => api.bulk(project, "verified", "pending"));
-        if (r) { await refreshLedger(); if (job) setJob(await api.latestJob()); flash(`Confirmed ${r.updated} facts.`); }
+        const r = await run("Confirming", async () => { const x = await api.bulk(project, "verified", "pending"); await refreshLedger(); if (job) setJob(await api.latestJob()); return x; });
+        if (r) flash(`Confirmed ${r.updated} facts.`);
       },
       rejectGroup: async (project) => {
         if (!live) return setFacts((fs) => fs.map((f) => (f.project === project && f.status !== "rejected" ? { ...f, status: "rejected" } : f)));
-        const r = await run("Rejecting", () => api.bulk(project, "rejected", "all"));
-        if (r) { await refreshLedger(); if (job) setJob(await api.latestJob()); flash(`Rejected ${r.updated} facts.`); }
+        const r = await run("Rejecting", async () => { const x = await api.bulk(project, "rejected", "all"); await refreshLedger(); if (job) setJob(await api.latestJob()); return x; });
+        if (r) flash(`Rejected ${r.updated} facts.`);
       },
       declareSkill: async (skill) => {
         if (!live) return;
@@ -297,16 +321,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       analyze: async (text) => {
         setJd(text);
         if (!live) { setDAnalyzed(true); return; }
-        const j = await run("CrewAI flow: JD Analyzer then Matcher, then ADK Writer and Verifier", () => api.analyze(text));
-        if (j) setJob(j);
+        await run("CrewAI flow: JD Analyzer then Matcher, then ADK Writer and Verifier", async () => { setJob(await api.analyze(text)); });
       },
       meta: live && job ? job.meta : (isAnalyzed ? jobMeta : emptyMeta),
       requirements: live && job ? job.requirements : (isAnalyzed ? seedReqs : []),
       projects: live && job ? job.projects : (isAnalyzed ? dProjects : []),
       toggleProject: async (id) => {
         if (!live || !job) return setDProjects((ps) => ps.map((p) => (p.id === id ? { ...p, picked: !p.picked } : p)));
-        const j = await run("Resume Writer + Verifier are rewriting the bullets for your new selection", () => api.toggleProject(job.id, id));
-        if (j) setJob(j);
+        await run("Resume Writer + Verifier are rewriting the bullets for your new selection", async () => { setJob(await api.toggleProject(job.id, id)); });
       },
       summary: live && job ? job.resume.summary : (isAnalyzed ? dSummary : ""),
       bullets: live && job ? job.resume.bullets : (isAnalyzed ? dBullets : []),
@@ -322,10 +344,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const fakeId = `U${Date.now()}`;
           setDBullets((bs) => [...bs, { id: fakeId, project, text, facts: [], verified, kind: "project", user: true }]);
           flash("Bullet added to resume!");
-          return;
+          return true;
         }
-        const j = await run("Adding suggested bullet to resume", () => api.addBullet(job.id, project, text, verified)).catch((e) => { setError(String(e.message ?? e)); return null; });
-        if (j) { setJob(j); flash("Bullet added to resume!"); }
+        const j = await run("Adding suggested bullet to resume", async () => { const x = await api.addBullet(job.id, project, text, verified); setJob(x); return x; });
+        if (j) { flash("Bullet added to resume!"); return true; }
+        return false;
       },
       editSummary: async (text) => {
         if (!live || !job) return setDSummary(text);
@@ -334,13 +357,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       undo: async () => {
         if (!live || !job) return;
-        const j = await run("Undoing the last change", () => api.undo(job.id));
-        if (j) { setJob(j); flash("Last change undone."); }
+        const j = await run("Undoing the last change", async () => { const x = await api.undo(job.id); setJob(x); return x; });
+        if (j) flash("Last change undone.");
       },
       regenerate: async () => {
         if (!live || !job) return;
-        const j = await run("ADK Resume Writer and Verifier loop", () => api.regenerate(job.id));
-        if (j) setJob(j);
+        await run("ADK Resume Writer and Verifier loop", async () => { setJob(await api.regenerate(job.id)); });
       },
       keywords: live && job ? job.keywords : (isAnalyzed ? dKeywords : []),
       decideKeyword: async (id, accept) => {
@@ -350,10 +372,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             const k = dKeywords.find((x) => x.id === id);
             if (k?.rewrite && k.fact && !dBullets.some((b) => b.id === "K-" + id)) setDBullets([...dBullets, { id: "K-" + id, project: "SkillOra", text: k.rewrite, facts: [k.fact], verified: true }]);
           }
-          return;
+          return true;
         }
-        const j = await run("Saving", () => api.decideKeyword(job.id, id, accept));
-        if (j) setJob(j);
+        const j = await run("Saving", async () => { const x = await api.decideKeyword(job.id, id, accept); setJob(x); return x; });
+        return !!j;
       },
       chat: live && job ? job.chat : (isAnalyzed ? dChat : []),
       sendChat: async (m) => {
@@ -400,7 +422,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return;
         }
         setJob({ ...job, chat: [...job.chat, { from: "user", text: m }] });
-        const r = await run("ADK Coordinator is thinking", () => api.chat(job.id, m));
+        const r = await run("ADK Coordinator is thinking", () => api.chat(job.id, m), true);
         if (r) {
           setJob(r.job);
           flash("Resume sheet updated via Google ADK Coordinator.");
@@ -411,7 +433,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       profiles: live && job ? job.profiles ?? [] : [],
       setScoreProfile: async (id) => {
         if (!live || !job) return;
-        const j = await run("Re-scoring with the new profile", () => api.setScoreProfile(job.id, id));
+        const j = await run("Re-scoring with the new profile", async () => { const x = await api.setScoreProfile(job.id, id); setJob(x); return x; });
         if (j) setJob(j);
       },
       eligibility: live && job ? job.eligibility ?? null : null,
@@ -420,7 +442,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       jobId: live && job ? job.id : null,
       mode: live && job ? job.mode : "demo",
     };
-  }, [live, ready, busy, error, notice, llm, profile, router, found, sources, facts, job, jd, dBullets, dKeywords, dProjects, dChat, dAnalyzed, dSummary, run, refreshLedger]);
+  }, [live, ready, busy, busyInline, error, notice, llm, profile, router, found, sources, facts, job, jd, dBullets, dKeywords, dProjects, dChat, dAnalyzed, dSummary, run, refreshLedger]);
 
   void reloadJob;
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
