@@ -266,7 +266,7 @@ def job_view(db: Session, job: Job) -> dict:
     prof_id = profile_info(d.get("profile", DEFAULT_PROFILE))["id"]
     years = getattr(db.get(User, job.user_id), "experience_years", None)
     sc = score(d["analysis"], d["matches"], facts, d["resume"], d["projects"], prof_id, years)
-    recs = recommendations(d["analysis"], facts, d["resume"], d["projects"], d["keywords"], sc, prof_id, years)
+    recs = recommendations(d["analysis"], facts, d["resume"], d["projects"], d["keywords"], sc, prof_id, years, d["matches"])
     a = d["analysis"]
     return {
         "id": job.id,

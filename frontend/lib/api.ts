@@ -15,6 +15,8 @@ export interface Recommendation {
   action_type?: string;
   keyword_id?: string;
   fact_id?: string;
+  skills?: string[];
+  delta?: number; // real simulated score change if this suggestion is accepted
 }
 export interface ApiProject {
   id?: string;

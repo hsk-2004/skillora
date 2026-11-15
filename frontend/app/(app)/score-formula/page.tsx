@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import SectionHeading from "@/components/SectionHeading";
+import ScoreExample from "@/components/ScoreExample";
 
 type Key = "K" | "J" | "E" | "Q" | "A";
 
@@ -15,6 +16,7 @@ const sections = [
   { id: "profiles", title: "Profiles" },
   { id: "missing", title: "Missing parts" },
   { id: "try", title: "Try it" },
+  { id: "example", title: "Worked example" },
   { id: "rules", title: "Fair play" },
 ];
 
@@ -224,9 +226,15 @@ export default function ScoreFormulaPage() {
         </div>
       </section>
 
-      {/* 6 Fair play */}
+      {/* 6 Worked example */}
+      <section className="space-y-4">
+        <SectionHeading n={6} id="example" title="Worked example" sub="A small job scored step by step, and how the score goes up." />
+        <ScoreExample />
+      </section>
+
+      {/* 7 Fair play */}
       <section className="space-y-4 pb-8">
-        <SectionHeading n={6} id="rules" title="Fair play" sub="What keeps the score honest and explainable." />
+        <SectionHeading n={7} id="rules" title="Fair play" sub="What keeps the score honest and explainable." />
         <div className="grid gap-4 sm:grid-cols-2">
           {[
             { t: "Deterministic", d: "Plain Python, no AI guessing. The same input always gives the same score. We tested 30 shuffled runs and got one score." },

@@ -17,7 +17,8 @@ If a component cannot be scored (e.g. years unknown) its weight is redistributed
 import re
 
 from ..vocab import find_skills, pretty
-from .matching import match_all
+from .matching import match_all, match_requirement
+from .verify import verify_bullet
 
 PROFILES: dict[str, dict] = {
     "standard": {"label": "Standard", "desc": "Balanced default: skills carry the most weight.",
@@ -161,114 +162,112 @@ def score(analysis: dict, matches: list[dict], facts: list[dict], resume: dict, 
     return {"total": total, "components": comps, "missing_must": missing_must, "eligibility": elig, "profile": prof}
 
 
+def _sim_total(analysis: dict, facts: list[dict], resume: dict, projects: list[dict], profile: str, years: float | None,
+               matches: list[dict] | None = None, only_unmet: bool = False) -> int:
+    """The REAL engine total for a hypothetical state: re-match the requirements against `facts`, then score. Used to price suggestions.
+    `only_unmet` re-matches just the requirements that are not already met (a new declared skill cannot change a met one): same result, much faster."""
+    if only_unmet and matches:
+        by_id = {m["id"]: m for m in matches}
+        ms = [by_id[r["id"]] if r["id"] in by_id and by_id[r["id"]]["match"] == "met" else match_requirement(r, facts) for r in analysis["requirements"]]
+    else:
+        ms = match_all(analysis["requirements"], facts)
+    return score(analysis, ms, facts, resume, projects, profile, years)["total"]
+
+
+def _sim_declared(facts: list[dict], n: int, skill: str) -> dict:
+    """A self-declared skill fact exactly like POST /api/facts/declare creates (counts at lower weight, no source proof)."""
+    base = dict(facts[0]) if facts else {"source": "self-declared"}
+    base.update(id=f"SIM{n}", text=skill, span="", project="Skills", category="skill", status="verified", declared=True)
+    return base
+
+
+_REC_CACHE: dict[str, list[dict]] = {}  # pricing suggestions runs the engine many times, so remember the result until the state changes
+
+
 def recommendations(analysis: dict, facts: list[dict], resume: dict, projects: list[dict], keywords: list[dict], base: dict,
-                    profile: str = DEFAULT_PROFILE, years: float | None = None) -> list[dict]:
-    """Ranked top 5 suggestions. No raw fact IDs. Clear verified vs not-verified labeling, with exact suggested bullets that can be accepted or rejected."""
+                    profile: str = DEFAULT_PROFILE, years: float | None = None, matches: list[dict] | None = None) -> list[dict]:
+    """Ranked top 5 suggestions. Every "+N pts" is the difference between two REAL engine runs (before and after the suggestion is applied),
+    so it is exactly what the score will show after Accept. Suggestions that would not raise the score are not offered as actions."""
+    import hashlib
+    import json
+
+    key = hashlib.sha1(json.dumps([base["total"], profile, years, [(f["id"], f["status"], f["text"], bool(f.get("declared"))) for f in facts],
+                                   [(b["text"], bool(b.get("verified"))) for b in resume.get("bullets", [])], [(k.get("id"), k.get("state")) for k in keywords],
+                                   [r["id"] for r in analysis["requirements"]]], default=str).encode()).hexdigest()
+    if key in _REC_CACHE:
+        return _REC_CACHE[key]
     by_id = {f["id"]: f for f in facts}
-    recs = []
+    cur = base["total"]
+    acts: list[dict] = []  # actionable: positive simulated gain
+    used_skills: set[str] = set()
 
-    # 1. Pending unverified facts in candidate ledger
+    # 1. Declare a missing skill (honest quick lever: counts at half weight, labelled self-declared). Covers missing must-haves and keyword gaps.
+    declared_text = {f["text"].lower() for f in facts if f.get("declared")}
+    wanted: list[tuple[str, list[str], str]] = []
+    for m in base.get("missing_must", [])[:4]:
+        sk = [pretty(x) for x in sorted(find_skills(m))][:3] or [m[:90]]
+        wanted.append((f"Cover required skill: {m[:70]}", sk, f"The job requires \"{m}\" and nothing in your verified facts shows it."))
+    for k in [k for k in keywords if k.get("state") == "gap"][:4]:
+        wanted.append((f"Add keyword: {k['word']}", [k["word"]], f"The job asks for {k['word']}, which no verified fact supports."))
+    for title, skills, why in wanted:
+        skills = [x for x in skills if x.lower() not in declared_text and x.lower() not in used_skills]
+        if not skills:
+            continue
+        sim = facts + [_sim_declared(facts, i, x) for i, x in enumerate(skills)]
+        d = _sim_total(analysis, sim, resume, projects, profile, years, matches, only_unmet=True) - cur
+        if d > 0:
+            used_skills.update(x.lower() for x in skills)
+            acts.append({"impact": d, "prio": 0, "title": title, "action_type": "declare_skill", "skills": skills, "verified": False, "project": "Skills",
+                         "detail": why + " Accepting declares it as a self-declared skill: it counts at half weight and is labelled as unproven. Add a project or source that shows it to earn full credit.",
+                         "suggested_bullet": "Declare: " + ", ".join(skills)})
+
+    # 2. Verify an unconfirmed claim (the matcher only counts verified facts)
     pending = [f for f in facts if f.get("status") == "pending" and not f.get("declared")]
-    if pending:
-        sim = [dict(f, status="verified") if f["status"] == "pending" else f for f in facts]
-        m2 = match_all(analysis["requirements"], sim)
-        d = score(analysis, m2, sim, resume, projects, profile, years)["total"] - base["total"]
-        first_p = pending[0]
-        proj_name = first_p.get("project") or "Career Experience"
-        short_claim = first_p.get("text", "")[:110]
-        recs.append({
-            "impact": max(d, 1),
-            "title": f"Verify unconfirmed claim from {proj_name}",
-            "detail": f"You cataloged experience: \"{short_claim}...\". Once verified in your Fact Ledger, this evidence directly validates target job requirements.",
-            "verified": False,
-            "suggested_bullet": first_p.get("text", ""),
-            "project": proj_name,
-            "action_type": "verify_fact",
-            "fact_id": first_p["id"]
-        })
+    seen_proj: set[str] = set()
+    for f in pending:
+        proj = f.get("project") or "Career Experience"
+        if proj in seen_proj or len(seen_proj) >= 4:
+            continue
+        seen_proj.add(proj)
+        sim = [dict(x, status="verified") if x["id"] == f["id"] else x for x in facts]
+        d = _sim_total(analysis, sim, resume, projects, profile, years) - cur
+        if d > 0:
+            acts.append({"impact": d, "prio": 1, "title": f"Verify unconfirmed claim from {proj}", "action_type": "verify_fact", "fact_id": f["id"], "verified": False,
+                         "project": proj, "suggested_bullet": f.get("text", ""),
+                         "detail": f"You cataloged: \"{f.get('text', '')[:110]}\". Once you confirm it, it counts as evidence for the job's requirements."})
 
-    # 2. Verified grounded keyword rewrites (Direct ATS match with JD)
+    # 3. Grounded keyword rewrite (a verified fact already supports it): adds that bullet to the resume
     for k in [k for k in keywords if k.get("state") == "suggested"][:3]:
         fact_obj = by_id.get(k.get("fact"))
-        if not fact_obj:  # the fact behind this suggestion was deleted (e.g. its source was removed) - skip it
+        if not fact_obj:
             continue
-        proj_name = fact_obj.get("project", "SkillOra")
-        fact_text = fact_obj.get("text") or fact_obj.get("span") or k.get("rewrite", "")
-        bullet_text = k.get("rewrite") or fact_text
-        recs.append({
-            "impact": 6,
-            "title": f"Incorporate '{k['word']}' into {proj_name}",
-            "detail": f"Proven by verified experience: \"{fact_text[:110]}...\". Adding this tailored bullet to your resume satisfies the {k['word']} requirement in the job description.",
-            "verified": True,
-            "suggested_bullet": bullet_text,
-            "project": proj_name,
-            "keyword_id": k.get("id"),
-            "action_type": "keyword_rewrite"
-        })
+        text = k.get("rewrite") or fact_obj.get("text") or ""
+        ok = verify_bullet(text, [fact_obj["id"]], by_id)["ok"]
+        sim_resume = {**resume, "bullets": resume.get("bullets", []) + [{"id": "SIMK", "project": fact_obj.get("project", ""), "kind": "project", "text": text,
+                                                                         "facts": [fact_obj["id"]], "verified": ok, "user": False}]}
+        d = _sim_total(analysis, facts, sim_resume, projects, profile, years) - cur
+        if d > 0:
+            acts.append({"impact": d, "prio": 2, "title": f"Add '{k['word']}' to {fact_obj.get('project', 'your resume')}", "action_type": "keyword_rewrite", "keyword_id": k.get("id"),
+                         "verified": True, "project": fact_obj.get("project", ""), "suggested_bullet": text,
+                         "detail": f"Proven by your verified experience: \"{text[:110]}\". Adding it puts {k['word']} on the resume with proof."})
 
-    # 3. Missing must-have requirements from target JD
-    for m in base.get("missing_must", [])[:2]:
-        recs.append({
-            "impact": 8,
-            "title": f"Address required skill: {m[:45]}",
-            "detail": f"Target job description explicitly mandates \"{m}\". If you have relevant engineering experience, accept this tailored draft bullet to incorporate it into your resume.",
-            "verified": False,
-            "suggested_bullet": f"Demonstrated practical engineering proficiency in {m} across scalable production environments.",
-            "project": "Production Projects",
-            "action_type": "missing_must"
-        })
-
-    # 4. Keyword gaps identified from target JD
-    for k in [k for k in keywords if k.get("state") == "gap"][:2]:
-        recs.append({
-            "impact": 5,
-            "title": f"Close ATS keyword gap: {k['word']}",
-            "detail": f"Target job description emphasizes \"{k['word']}\". Accept this recommendation to add a tailored bullet that increases recruiter ATS keyword density.",
-            "verified": False,
-            "suggested_bullet": f"Applied {k['word']} to optimize system performance, architecture reliability, and service integration.",
-            "project": "SkillOra",
-            "keyword_id": k.get("id"),
-            "action_type": "skill_gap"
-        })
-
-    # 5. Production metrics quantification (Google XYZ framework)
-    recs.append({
-        "impact": 7,
-        "title": "Quantify project impact with Google XYZ metrics",
-        "detail": "Verified evidence available. Enhance resume bullets with concrete throughput and latency metrics (e.g., 35% latency reduction, 98.4% precision) from your project code.",
-        "verified": True,
-        "suggested_bullet": "Optimized multi-agent inference pipeline reducing end-to-end response latency by 35% while maintaining 98.4% fact extraction precision.",
-        "project": "SkillOra",
-        "action_type": "metrics"
-    })
-
-    # 6. Experience years
+    acts.sort(key=lambda r: (-r["impact"], r["prio"]))
+    advice: list[dict] = []
+    # 4. Advice only (no automatic change: these need your real information, so they are not offered as one-click adds)
+    advice.append({"impact": 0, "title": "Quantify your bullets with real numbers", "action_type": "advice", "verified": False, "project": "",
+                   "detail": "Bullets with a real number (users, % faster, time saved) score higher on Evidence quality. Edit a bullet and add a figure you can prove.", "suggested_bullet": ""})
     e = next((c for c in base.get("components", []) if c.get("key") == NAMES.get("E")), None)
     if e and not e.get("scored") and years is None:
-        recs.append({
-            "impact": 4,
-            "title": "Specify relevant professional experience",
-            "detail": "Adding your years of relevant experience allows the experience weighting component of the score to be computed.",
-            "verified": False,
-            "suggested_bullet": "Experienced in full-lifecycle software architecture and distributed system engineering.",
-            "project": "Experience & Internships",
-            "action_type": "experience_years"
-        })
+        advice.append({"impact": 0, "title": "Add your years of experience", "action_type": "advice", "verified": False, "project": "",
+                       "detail": "Add it in Add Sources > Your details so Experience can be scored. If it is below what the job asks, the score can go down: it is an honest measure, not a bonus.",
+                       "suggested_bullet": ""})
 
-    # Sort by impact and return top 5
-    recs.sort(key=lambda r: -r["impact"])
     out = []
-    for i, r in enumerate(recs[:5]):
-        out.append({
-            "n": i + 1,
-            "title": r["title"],
-            "impact": f"+{r['impact']} pts" if not str(r['impact']).startswith("+") else str(r['impact']),
-            "detail": r["detail"],
-            "verified": bool(r.get("verified", False)),
-            "suggested_bullet": r.get("suggested_bullet", ""),
-            "project": r.get("project", "SkillOra"),
-            "keyword_id": r.get("keyword_id"),
-            "action_type": r.get("action_type", "general"),
-            "fact_id": r.get("fact_id")
-        })
+    for i, r in enumerate((acts + advice)[:5]):
+        out.append({"n": i + 1, "title": r["title"], "impact": f"+{r['impact']} pts" if r["impact"] > 0 else "Advice", "delta": r["impact"], "detail": r["detail"],
+                    "verified": bool(r.get("verified", False)), "suggested_bullet": r.get("suggested_bullet", ""), "project": r.get("project", ""),
+                    "keyword_id": r.get("keyword_id"), "action_type": r["action_type"], "fact_id": r.get("fact_id"), "skills": r.get("skills", [])})
+    if len(_REC_CACHE) > 64:
+        _REC_CACHE.clear()
+    _REC_CACHE[key] = out
     return out

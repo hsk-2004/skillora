@@ -4,11 +4,13 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import RequirementsModal from "@/components/RequirementsModal";
+import { TEAM } from "@/lib/team";
 
 export default function Home() {
   const [showPricing, setShowPricing] = useState(false);
   const [showResources, setShowResources] = useState(false);
   const [showRequirements, setShowRequirements] = useState(false);
+  const [showTeam, setShowTeam] = useState(false);
   return (
     <div className="h-screen w-screen max-h-screen overflow-hidden bg-[#FAF9F5] text-[#141A16] relative flex flex-col justify-between selection:bg-[#DCFCE7] selection:text-[#166534]">
       
@@ -61,6 +63,14 @@ export default function Home() {
             style={{ marginRight: "6px" }}
           >
             Pricing
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowTeam(true)}
+            className="px-3.5 py-1.5 rounded-xl hover:text-[#1E6B38] hover:bg-[#EAF4EB] transition-all cursor-pointer whitespace-nowrap"
+            style={{ marginRight: "6px" }}
+          >
+            Team
           </button>
           <button
             type="button"
@@ -149,6 +159,14 @@ export default function Home() {
               <span>Explore Demo</span>
             </Link>
           </div>
+
+          {/* Team credit */}
+          <p className="pt-3 text-[11px] text-[#6B756E]">
+            Built by{" "}
+            <button type="button" onClick={() => setShowTeam(true)} className="font-semibold text-[#1E6B38] hover:underline cursor-pointer">
+              {TEAM.map((m) => m.name).join(" · ")}
+            </button>
+          </p>
         </div>
 
         {/* Floating Interactive Device Showcase Area with 3D inward perspective tilt */}
@@ -428,6 +446,49 @@ export default function Home() {
         </div>
 
       </main>
+
+      {/* Team Modal */}
+      {showTeam && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setShowTeam(false)}>
+          <div
+            className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full border border-[#ECE7DD] shadow-2xl space-y-6 relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowTeam(false)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-slate-700 text-lg w-8 h-8 rounded-full flex items-center justify-center hover:bg-slate-100 transition-colors cursor-pointer"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#1E6B38] bg-[#EAF4EB] px-2.5 py-0.5 rounded-full border border-[#C5E1CB]">
+                CSE3101 Agentic AI
+              </span>
+              <h3 className="text-2xl font-serif font-bold text-[#141A16]">Meet the team</h3>
+              <p className="text-xs text-[#556056] leading-relaxed">Four builders, one verifiable career profile.</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {TEAM.map((m) => (
+                <div key={m.name} className="p-4 rounded-2xl border border-[#ECE7DD] bg-[#FAF9F5] space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-[#1E6B38] text-white text-sm font-bold flex items-center justify-center shrink-0">
+                      {m.name.split(" ").map((p) => p[0]).slice(0, 2).join("")}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-[#141A16] leading-tight">{m.name}</p>
+                      <p className="text-[11px] font-semibold text-[#1E6B38]">{m.role}</p>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-[#556056] leading-relaxed">{m.focus}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Pricing Modal */}
       {showPricing && (

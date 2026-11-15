@@ -92,6 +92,9 @@ interface SuggestionItem {
   project: string;
   keyword_id?: string;
   action_type?: string;
+  fact_id?: string;
+  skills?: string[];
+  delta?: number;
 }
 
 // 7 Actual User Prompts for Google ADK demonstration
@@ -157,7 +160,7 @@ const DECISIONS_KEY = "skillora.tailorDecisions";
 
 // Stable identity for a suggestion. Its position in the list changes after every edit (the list is re-ranked), so position can't be used.
 const suggestionKey = (r: { action_type?: string; keyword_id?: string | null; project?: string; suggested_bullet?: string; title?: string }) =>
-  [r.action_type ?? "", r.keyword_id ?? "", r.project ?? "", (r.suggested_bullet ?? r.title ?? "").slice(0, 80)].join("|");
+  [r.action_type ?? "", r.keyword_id ?? "", r.project ?? "", (r.suggested_bullet || r.title || "").slice(0, 80)].join("|");
 
 export default function TailorPage() {
   const chatBoxRef = useRef<HTMLDivElement>(null);
@@ -249,10 +252,13 @@ export default function TailorPage() {
         verified: r.verified ?? false,
         sourceContext: r.project || (r.verified ? "Verified Fact Ledger" : "Target Job Description"),
         detail: r.detail,
-        suggested_bullet: r.suggested_bullet || "Engineered scalable solutions leveraging verified technologies to meet production requirements.",
-        project: r.project || "SkillOra",
+        suggested_bullet: r.suggested_bullet ?? "",
+        project: r.project || "",
         keyword_id: r.keyword_id,
         action_type: r.action_type,
+        fact_id: r.fact_id,
+        skills: r.skills,
+        delta: r.delta,
       }))
     : [
         {
@@ -313,6 +319,10 @@ export default function TailorPage() {
   // Once the job is loaded the resume itself is the truth (so Undo and edits are respected). Until then, use the saved decision.
   const isSuggestionAccepted = (sug: SuggestionItem) => {
     if (live && st.jobId != null) {
+      if (sug.action_type === "declare_skill") {
+        return (sug.skills ?? []).length > 0 && (sug.skills ?? []).every((x) => st.facts.some((f) => f.declared && f.text.toLowerCase() === x.toLowerCase()));
+      }
+      if (sug.action_type === "verify_fact") return st.facts.find((f) => f.id === sug.fact_id)?.status === "verified";
       if (sug.keyword_id) return st.keywords.some((k) => k.id === sug.keyword_id && k.state === "accepted");
       const t = sug.suggested_bullet.trim();
       return bullets.some((b) => b.text.trim() === t);
@@ -325,9 +335,17 @@ export default function TailorPage() {
     setApplying(true);
     try {
       // 1. If linked to keyword, decide keyword; otherwise add the bullet to the resume
-      const ok = sug.keyword_id
-        ? await st.decideKeyword(sug.keyword_id, true)
-        : await st.addBullet(sug.project, sug.suggested_bullet, sug.verified);
+      // Each action is exactly what the engine simulated for the "+N pts" label, so the score really rises.
+      let ok = true;
+      if (sug.action_type === "declare_skill") {
+        for (const skill of sug.skills ?? []) await st.declareSkill(skill);
+      } else if (sug.action_type === "verify_fact" && sug.fact_id) {
+        await st.setFactStatus(sug.fact_id, "verified");
+      } else if (sug.keyword_id) {
+        ok = await st.decideKeyword(sug.keyword_id, true);
+      } else {
+        ok = await st.addBullet(sug.project, sug.suggested_bullet, sug.verified);
+      }
 
       // 2. Mark as accepted only after the save really succeeded
       if (ok) {
@@ -601,13 +619,15 @@ export default function TailorPage() {
                       </span>
                     </div>
 
-                    {/* Proposed Draft Resume Bullet */}
-                    <div className="p-2.5 rounded-lg bg-white border border-[#E5E1D5] text-xs text-[#141A16] font-sans leading-relaxed space-y-1">
-                      <p className="text-[10px] font-bold text-[#78827A] uppercase tracking-wider">
-                        Proposed Tailored Bullet ({sug.project}):
-                      </p>
-                      <p className="italic text-[#141A16]">"{sug.suggested_bullet}"</p>
-                    </div>
+                    {/* What accepting will do */}
+                    {sug.action_type !== "advice" && (
+                      <div className="p-2.5 rounded-lg bg-white border border-[#E5E1D5] text-xs text-[#141A16] font-sans leading-relaxed space-y-1">
+                        <p className="text-[10px] font-bold text-[#78827A] uppercase tracking-wider">
+                          {sug.action_type === "declare_skill" ? "Skills to declare (self-declared, half weight):" : sug.action_type === "verify_fact" ? `Claim to confirm (${sug.project}):` : `Bullet to add (${sug.project}):`}
+                        </p>
+                        <p className="italic text-[#141A16]">{sug.action_type === "declare_skill" ? (sug.skills ?? []).join(", ") : `"${sug.suggested_bullet}"`}</p>
+                      </div>
+                    )}
 
                     {/* Interactive Accept & Reject Controls */}
                     <div className="flex items-center justify-between pt-1 gap-2 flex-wrap">
@@ -624,7 +644,7 @@ export default function TailorPage() {
                         {isAccepted ? (
                           <span className="px-3 py-1.5 rounded-lg bg-[#EAF4EB] text-[#1E6B38] font-bold text-xs border border-[#C5E1CB] flex items-center gap-1.5">
                             <IconCheck className="w-3.5 h-3.5 text-[#1E6B38]" />
-                            <span>Added to Resume</span>
+                            <span>{sug.action_type === "declare_skill" ? "Skill declared" : sug.action_type === "verify_fact" ? "Claim confirmed" : "Added to Resume"}</span>
                           </span>
                         ) : (
                           <>
@@ -634,17 +654,19 @@ export default function TailorPage() {
                               className="px-3 py-1.5 rounded-lg bg-white hover:bg-rose-50 text-[#78827A] hover:text-rose-700 border border-[#ECE7DD] hover:border-rose-200 font-semibold text-xs flex items-center gap-1 transition-all cursor-pointer"
                             >
                               <IconClose className="w-3 h-3" />
-                              <span>Reject</span>
+                              <span>{sug.action_type === "advice" ? "Dismiss" : "Reject"}</span>
                             </button>
 
-                            <button
-                              type="button"
-                              onClick={() => handleAcceptSuggestion(sug)}
-                              className="px-3.5 py-1.5 rounded-lg bg-[#1E6B38] hover:bg-[#16532B] text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
-                            >
-                              <IconCheck className="w-3.5 h-3.5 text-white" />
-                              <span>Accept &amp; Add</span>
-                            </button>
+                            {sug.action_type !== "advice" && (
+                              <button
+                                type="button"
+                                onClick={() => handleAcceptSuggestion(sug)}
+                                className="px-3.5 py-1.5 rounded-lg bg-[#1E6B38] hover:bg-[#16532B] text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                              >
+                                <IconCheck className="w-3.5 h-3.5 text-white" />
+                                <span>{sug.action_type === "declare_skill" ? "Declare skill" : sug.action_type === "verify_fact" ? "Confirm claim" : "Accept &amp; Add"}</span>
+                              </button>
+                            )}
                           </>
                         )}
                       </div>

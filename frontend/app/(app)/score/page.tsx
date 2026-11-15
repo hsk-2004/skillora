@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import ScoreRing from "@/components/ScoreRing";
+import ScoreExample from "@/components/ScoreExample";
 import { useStore } from "@/lib/store";
 
 export default function ScorePage() {
@@ -239,6 +240,15 @@ export default function ScorePage() {
           </Link>
         </div>
       </div>
+
+      {/* Worked example: a small job scored step by step with the real formula */}
+      <section className="space-y-4 pb-8">
+        <div>
+          <h2 className="text-2xl font-serif text-[#141A16] tracking-tight">Worked example: how a score is calculated</h2>
+          <p className="text-sm text-[#556056] leading-relaxed mt-1">A small job scored step by step, and what happens to the score when a missing skill is fixed.</p>
+        </div>
+        <ScoreExample />
+      </section>
 
     </div>
   );
